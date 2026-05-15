@@ -300,30 +300,39 @@
       <h3 class="text-xl font-black tracking-tight mb-5">How this was orchestrated</h3>
       <div class="grid sm:grid-cols-2 gap-6 text-sm text-slate-700 leading-relaxed">
         <div>
-          <div class="font-bold text-ink mb-1">&#9679; Agent main lane <span class="text-ai">(purple)</span></div>
-          <p>Claude Code writes Rust continuously on <span class="mono text-xs">claude/phase-a-port</span> — one commit every ~9 seconds, no compilation, just write and record. 6,573 commits, all timestamped UTC.</p>
+          <div class="font-bold text-ink mb-1">&#9679; Agent main <span class="text-ai">(purple)</span></div>
+          <p>Claude Code writes Rust on <span class="mono text-xs">claude/phase-a-port</span> — ~9s per commit, no compilation, just write and record. 5,439 trunk commits, all timestamped UTC.</p>
         </div>
         <div>
-          <div class="font-bold text-ink mb-1">&#9679; Sub-branches <span class="text-blue-600">(blue)</span></div>
-          <p>When a specific task needs isolation — unsafe-block reduction (×27), code dedup, string refactors — the agent opens a <span class="mono text-xs">claude/*</span> branch, does the work, and merges back. Ringed dots show where merges land on main.</p>
+          <div class="font-bold text-ink mb-1">&#9679; Phase-f worktrees <span style="color:#06B6D4">(cyan)</span></div>
+          <p>May 7 local git worktrees — parallel audit campaigns (unsafe-audit, send-sync, transmute, mem-zeroed, etc.) spun up locally and merged back. 651 commits, all before CI automation existed.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; unsafe-5k <span class="text-blue-600">(blue)</span></div>
+          <p>The <span class="mono text-xs">claude/unsafe-5k</span> campaign: eliminating unsafe blocks across the codebase. Merged into main 27 times on May 12–13. 255 commits.</p>
         </div>
         <div>
           <div class="font-bold text-ink mb-1">&#9679; Bench-until-green <span class="text-caution">(amber)</span></div>
-          <p>A dedicated benchmark-repair branch that runs until benchmarks pass. Spawned 19 times — each time CI flagged a regression, a new instance launched, fixed it, and merged back.</p>
+          <p>Dedicated benchmark-repair branch, respawned every time CI flagged a regression. 218 commits across 19 merge cycles.</p>
         </div>
         <div>
-          <div class="font-bold text-ink mb-1">&#9679; CI auto-fix bot <span class="text-concern">(red)</span></div>
-          <p><span class="mono text-xs">autofix.ci</span> bot responds to CI failures by opening a numbered branch (<span class="mono text-xs">ci-auto-fix-53599</span>, etc.), patching the failure, and merging. 42 automated fix commits — the outer verification loop in action.</p>
+          <div class="font-bold text-ink mb-1">&#9679; CI auto-fix <span class="text-concern">(red)</span></div>
+          <p><span class="mono text-xs">autofix.ci</span> bot opens numbered branches (<span class="mono text-xs">ci-auto-fix-53599</span>, etc.) and patches failures. 49 commits — the outer verification loop.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Divergence fix <span style="color:#8B5CF6">(violet)</span></div>
+          <p><span class="mono text-xs">divergence-fix-all</span>, <span class="mono text-xs">divergence-top5</span>, <span class="mono text-xs">zig-rust-divergence-audit</span> — branches that caught Zig→Rust behavioral divergences. 47 commits.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Flaky fix <span style="color:#EC4899">(pink)</span></div>
+          <p><span class="mono text-xs">flaky-stabilize</span> v1/v2/v3 and <span class="mono text-xs">fix-hot-h3-flakes</span>. Targeted test instability rather than compile failures. 8 commits.</p>
         </div>
         <div>
           <div class="font-bold text-ink mb-1">&#9679; Jarred <span class="text-verified">(green)</span></div>
-          <p>88 commits from Jarred Sumner's Mac (timezone <span class="mono text-xs">-0700</span>) — architectural decisions, CMake build wiring, test pins, and the final merge to <span class="mono text-xs">main</span>. Every green dot is a human intervention.</p>
-        </div>
-        <div>
-          <div class="font-bold text-ink mb-1">&#9711; Ringed dots = merges</div>
-          <p>276 merge commits total. When a sub-branch completes, it merges INTO <span class="mono text-xs">claude/phase-a-port</span>. The curved arrows show that direction — sub-branch tip flowing down into the agent main lane.</p>
+          <p>88 commits from Jarred's Mac (timezone <span class="mono text-xs">-0700</span>) — architecture, CMake wiring, test pins, and the final merge. Every green dot is a human decision.</p>
         </div>
       </div>
+      <p class="text-xs text-slate-400 mt-5">&#9711; Ringed dots are merge commits. Curved arrows show sub-branch tips flowing into the agent main lane — 276 total.</p>
     </div>
   </div>
 
@@ -340,8 +349,8 @@
 
     var DPR = window.devicePixelRatio || 1;
     var ML = 175, MR = 70, MT = 28, MB = 52;
-    var CANVAS_H = 400;
-    var N_LANES = 5;
+    var CANVAS_H = 520;
+    var N_LANES = 8;
     var animating = false, rafId = null;
     var revealTs = 0, minTs = 0, maxTs = 0;
     var positions = [];    // {x, y, c} for all commits
@@ -512,7 +521,7 @@
       ctx.globalAlpha=1;
 
       // per-lane counts on the right
-      laneCounts = [0,0,0,0,0];
+      laneCounts = [0,0,0,0,0,0,0,0];
       visible.forEach(function(p){ laneCounts[laneIdx(p.c.b)]++; });
       ctx.textAlign='left'; ctx.textBaseline='middle';
       ctx.font='bold 11px ui-monospace,monospace';
@@ -823,6 +832,29 @@
       Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main port
       branch &mdash; the campaign re-ran until its goal condition was met.
     </p>
+
+    <!-- Compile strategy evolution -->
+    <div class="mt-10">
+      <h3 class="text-xl font-black tracking-tight mb-4">How compile verification evolved</h3>
+      <p class="text-sm text-slate-600 mb-5 max-w-2xl">The agent didn't start with CI branches. It ran three distinct verification strategies across the 10 days — each one a response to the scale of what it was building.</p>
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">May 4 – 6 &nbsp;·&nbsp; ~3,000 commits</div>
+          <div class="text-base font-black text-ink mb-2">Local <span class="mono text-sm">cargo check</span></div>
+          <p class="text-sm text-slate-600">Phase-b1 gated each of 96 crates individually — "bun_alloc compiles", "tier-3 — 11/11 crates compile". Phase-b2/d fixed compile errors inline, next commit. A cargo-check daemon ran locally; parallel agent processes read a shared <span class="mono text-xs">/tmp/cargo-check.log</span>. Fast because <span class="mono text-xs">cargo check</span> is 10–50× faster than a full build.</p>
+        </div>
+        <div class="rounded-xl border border-ai/20 bg-ai/5 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-ai mb-1">May 7 &nbsp;·&nbsp; First 52 merges</div>
+          <div class="text-base font-black text-ink mb-2">Local git worktrees</div>
+          <p class="text-sm text-slate-600">Phase-f introduced parallel local worktrees — one per audit campaign: <span class="mono text-xs">option-ptr-ffi</span>, <span class="mono text-xs">send-sync-audit</span>, <span class="mono text-xs">transmute-static</span>, <span class="mono text-xs">mem-zeroed</span>. Each ran independently and merged back locally. All 651 phase-f commits happened before any CI automation. Still no remote CI branches.</p>
+        </div>
+        <div class="rounded-xl border border-concern/20 bg-concern/5 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">May 8 – 14 &nbsp;·&nbsp; CI era</div>
+          <div class="text-base font-black text-ink mb-2">Remote CI branches</div>
+          <p class="text-sm text-slate-600"><span class="mono text-xs">cargo check</span> can't catch link errors, test failures, or platform-specific bugs. Once the full binary was being built by CI, failures appeared that needed async repair. <span class="mono text-xs">autofix.ci</span> started spawning numbered branches automatically; bench-until-green, flaky-stabilize, and divergence-fix ran as their own parallel campaigns.</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Phase breakdown chart -->
     <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 mt-10">
