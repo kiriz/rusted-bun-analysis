@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>How Claude Code Rewrote 1 Million Lines of Bun — A Forensic Analysis of PR #30412</title>
-<meta name="description" content="A forensic analysis of oven-sh/bun PR #30412: 6,755 commits, 1,009,257 lines, 10 days, one AI agent. The commits are real. Here is how it actually happened." />
-<meta property="og:title" content="How Claude Code Rewrote 1 Million Lines of Bun" />
-<meta property="og:description" content="A forensic analysis of PR #30412 — 6,755 commits, 10 days, one AI agent." />
+<title>Anthropic RUSTed the BUN — A Look Inside PR #30412</title>
+<meta name="description" content="oven-sh/bun PR #30412: 1,009,257 lines of Rust, 6,755 commits, 10 days, one AI agent. What the git history actually shows." />
+<meta property="og:title" content="Anthropic RUSTed the BUN" />
+<meta property="og:description" content="1,009,257 lines of Rust · 6,755 commits · 10 days · one AI agent." />
 <meta property="og:type" content="article" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,6 +23,7 @@
           verified: '#10B981',
           caution: '#F59E0B',
           concern: '#EF4444',
+          rust: '#F59E0B',
           ink: '#0F172A',
           surface: '#F8FAFC',
         },
@@ -35,15 +36,187 @@
   body { -webkit-font-smoothing: antialiased; }
   .chart-box { position: relative; width: 100%; }
   .mono { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
-  /* Anchor offset so sticky nav doesn't cover headings */
   section[id] { scroll-margin-top: 88px; }
   details > summary { list-style: none; cursor: pointer; }
   details > summary::-webkit-details-marker { display: none; }
   details[open] .chev { transform: rotate(90deg); }
   .chev { transition: transform 0.2s ease; }
   .grad-purple { background: linear-gradient(135deg, #7C3AED 0%, #4C1D95 100%); }
+  .grad-rust { background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%); }
   .pill-shadow { box-shadow: 0 8px 30px rgba(124, 58, 237, 0.25); }
+  .pill-shadow-rust { box-shadow: 0 8px 30px rgba(245, 158, 11, 0.30); }
   ::selection { background: #7C3AED; color: #fff; }
+
+  /* ==== Engineering pipeline ==== */
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  .pipe-step {
+    flex: 1 1 160px;
+    min-width: 160px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 14px 12px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .pipe-step::after {
+    content: '→';
+    position: absolute;
+    right: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #7C3AED;
+    font-weight: 800;
+    font-size: 1.25rem;
+    z-index: 1;
+  }
+  .pipe-step:last-child::after { content: ''; }
+  .pipe-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    background: rgba(124,58,237,0.10);
+    color: #7C3AED;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .pipe-name {
+    font-weight: 800;
+    color: #0F172A;
+    font-size: 0.9rem;
+    line-height: 1.2;
+  }
+  .pipe-desc {
+    color: #475569;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+  .pipe-metric {
+    display: inline-block;
+    margin-top: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: #7C3AED;
+    background: rgba(124,58,237,0.08);
+    padding: 2px 7px;
+    border-radius: 6px;
+    align-self: flex-start;
+  }
+  @media (max-width: 768px) {
+    .pipe-step::after {
+      content: '↓';
+      right: 50%;
+      top: auto;
+      bottom: -18px;
+      transform: translateX(50%);
+    }
+  }
+
+  /* ==== Heatmap ==== */
+  .heat-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .heat-tab {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.1;
+    text-align: left;
+    min-width: 70px;
+    transition: all 0.12s ease;
+  }
+  .heat-tab:hover { border-color: #7C3AED; color: #0F172A; }
+  .heat-tab.active {
+    background: #7C3AED;
+    color: #fff;
+    border-color: #7C3AED;
+  }
+  .heat-tab .heat-tab-day { display: block; font-weight: 700; }
+  .heat-tab .heat-tab-count {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.65rem;
+    opacity: 0.75;
+    margin-top: 1px;
+  }
+  .heat-grid-wrap { overflow-x: auto; }
+  .heat-grid {
+    border-collapse: separate;
+    border-spacing: 2px;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .heat-grid th {
+    font-weight: 600;
+    text-align: center;
+    padding: 2px 0;
+    color: #94a3b8;
+  }
+  .heat-grid td.row-label {
+    color: #94a3b8;
+    padding-right: 6px;
+    text-align: right;
+    font-size: 0.65rem;
+  }
+  .heat-cell {
+    width: 28px;
+    height: 20px;
+    border-radius: 3px;
+    background: rgba(124,58,237,0);
+    border: 1px solid rgba(15,23,42,0.04);
+    cursor: default;
+    transition: outline 0.08s;
+  }
+  .heat-cell:hover { outline: 2px solid #0F172A; }
+  .heat-tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: #0F172A;
+    color: #fff;
+    font-size: 0.72rem;
+    padding: 5px 9px;
+    border-radius: 6px;
+    z-index: 100;
+    transform: translate(-50%, -130%);
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0;
+    transition: opacity 0.08s;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .heat-tooltip.show { opacity: 1; }
+  .heat-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 0.7rem;
+    color: #64748b;
+  }
+  .heat-legend .swatch {
+    display: inline-block;
+    width: 18px; height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(15,23,42,0.06);
+  }
 </style>
 </head>
 <body class="font-sans bg-surface text-ink antialiased">
@@ -52,18 +225,17 @@
 <nav class="sticky top-0 z-50 bg-ink/95 backdrop-blur border-b border-white/10">
   <div class="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
     <a href="#hero" class="text-white font-bold tracking-tight text-sm sm:text-base flex items-center gap-2">
-      <span class="inline-block w-2.5 h-2.5 rounded-full bg-ai"></span>
-      PR&nbsp;#30412&nbsp;<span class="text-white/40 font-normal hidden sm:inline">forensic analysis</span>
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-rust"></span>
+      PR&nbsp;#30412
     </a>
     <div class="hidden md:flex items-center gap-3 text-xs font-medium text-white/60">
       <a href="#tldr" class="hover:text-white transition">TL;DR</a>
-      <a href="#timeline" class="hover:text-white transition">Timeline</a>
       <a href="#architecture" class="hover:text-white transition">Architecture</a>
       <a href="#engineering" class="hover:text-white transition">Eng.&nbsp;Plan</a>
+      <a href="#timeline" class="hover:text-white transition">Timeline</a>
       <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
-      <a href="#paradox" class="hover:text-white transition">Speed Paradox</a>
-      <a href="#tokens" class="hover:text-white transition">Token Math</a>
-      <a href="#questions" class="hover:text-white transition">Questions</a>
+      <a href="#paradox" class="hover:text-white transition">Speed</a>
+      <a href="#appendix" class="hover:text-white transition">Appendix</a>
     </div>
     <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
        class="text-xs font-semibold bg-ai hover:bg-ai/80 transition text-white px-3 py-1.5 rounded-md">
@@ -72,26 +244,31 @@
   </div>
 </nav>
 
-<!-- ============ 1. HERO ============ -->
+<!-- ============ HERO ============ -->
 <header id="hero" class="bg-ink relative overflow-hidden">
   <div class="absolute inset-0 opacity-30"
-       style="background-image: radial-gradient(circle at 20% 20%, #7C3AED55 0%, transparent 45%), radial-gradient(circle at 85% 70%, #4C1D9566 0%, transparent 50%);"></div>
+       style="background-image: radial-gradient(circle at 18% 20%, #F59E0B55 0%, transparent 45%), radial-gradient(circle at 85% 70%, #7C3AED66 0%, transparent 50%);"></div>
   <div class="relative max-w-5xl mx-auto px-5 py-20 sm:py-28 text-center">
-    <span class="inline-block text-xs font-semibold tracking-widest uppercase text-ai mb-6 border border-ai/40 rounded-full px-4 py-1.5">
-      Forensic Analysis &middot; oven-sh/bun
+    <span class="inline-block text-xs font-semibold tracking-widest uppercase text-rust mb-6 border border-rust/40 rounded-full px-4 py-1.5">
+      oven-sh/bun &middot; PR&nbsp;#30412
     </span>
-    <h1 class="text-white font-black tracking-tight leading-[1.05] text-4xl sm:text-6xl lg:text-7xl">
-      How Claude Code Rewrote<br class="hidden sm:block" />
-      <span class="bg-gradient-to-r from-ai to-fuchsia-400 bg-clip-text text-transparent">1&nbsp;Million&nbsp;Lines</span> of Bun
+    <h1 class="text-white font-black tracking-tight leading-[1.05] text-5xl sm:text-7xl lg:text-8xl">
+      Anthropic
+      <span class="bg-gradient-to-r from-rust to-amber-300 bg-clip-text text-transparent">RUSTed</span>
+      the
+      <span class="bg-gradient-to-r from-ai to-fuchsia-400 bg-clip-text text-transparent">BUN</span>
     </h1>
-    <p class="mt-6 text-lg sm:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed">
-      A forensic analysis of PR&nbsp;#30412 — 6,755 commits, 10 days, one AI agent.
+    <p class="mt-7 text-xl sm:text-2xl text-white/85 font-medium tabular-nums">
+      1,009,257 lines of Rust
+    </p>
+    <p class="mt-2 text-base sm:text-lg text-white/55">
+      6,755 commits &middot; 10 days &middot; one AI agent
     </p>
 
     <div class="mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-      <div class="grad-purple pill-shadow rounded-2xl px-6 py-4 text-left">
+      <div class="grad-rust pill-shadow-rust rounded-2xl px-6 py-4 text-left">
         <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">1,009,257</div>
-        <div class="text-xs font-medium text-white/70 uppercase tracking-wide">lines added</div>
+        <div class="text-xs font-medium text-white/80 uppercase tracking-wide">lines added</div>
       </div>
       <div class="grad-purple pill-shadow rounded-2xl px-6 py-4 text-left">
         <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">6,755</div>
@@ -114,214 +291,52 @@
   </div>
 </header>
 
-<!-- ============ 2. TL;DR ============ -->
+<!-- ============ TL;DR ============ -->
 <section id="tldr" class="bg-white">
   <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <div class="flex items-center gap-3 mb-2">
-      <span class="text-xs font-bold tracking-widest uppercase text-ai">Executive Summary</span>
-    </div>
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-8">TL;DR</h2>
     <ul class="space-y-5 text-lg sm:text-xl leading-relaxed text-slate-700">
       <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
-        <span><strong class="text-ink">The claim.</strong> Anthropic's Claude Code rewrote Bun's entire Zig
-        codebase in Rust — over a million lines — and the PR was merged into <span class="mono">oven-sh/bun</span>
-        on May&nbsp;14,&nbsp;2026.</span>
-      </li>
-      <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
-        <span><strong class="text-ink">The commits are real.</strong> They were not rebased, squashed, or
-        fabricated. 99.2% of commits have an author timestamp that matches the committer timestamp within two
-        seconds — the signature of code written and committed in a continuous live stream.</span>
+        <span><strong class="text-ink">The commits are real.</strong> 99.2% of commits have author and committer
+        timestamps that match within two seconds &mdash; the signature of code written and committed in a continuous
+        live stream, with no rebasing.</span>
       </li>
       <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
-        <span><strong class="text-ink">The approach was structured.</strong> Work moved through explicit phases
-        labeled <span class="mono">a&nbsp;&rarr;&nbsp;h</span>, with multiple sub-agent branches — every one of
-        them named <span class="mono">claude/*</span> — merging fixes back into the main port branch.</span>
+        <span><strong class="text-ink">The engineering was expert-grade.</strong> Before writing a line of Rust the
+        agent built its own 175-line crate-DAG analyzer, then design docs for cycle-breaking and dispatch, then the
+        migration itself &mdash; the canonical instrument&rarr;spec&rarr;decompose playbook.</span>
       </li>
       <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
-        <span><strong class="text-ink">The engineering plan was expert-grade.</strong> Before writing a line of
-        Rust, the agent wrote its own 175-line crate-dependency analyzer (<span
-        class="mono">crate-dag.ts</span>), then design documents specifying cycle-breaking and dispatch
-        strategies — the canonical "instrument&nbsp;&rarr;&nbsp;spec&nbsp;&rarr;&nbsp;decompose" playbook for
-        monolith-to-workspace migrations.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
-        <span><strong class="text-ink">The AI-vs-human boundary is visible in the raw git objects.</strong>
-        Every commit encodes the author's timezone: <strong>6,635 commits are
-        <span class="mono">+0000</span></strong> (Claude Code's UTC automated environment) versus
-        <strong>38 commits are <span class="mono">-0700</span></strong> (Jarred Sumner's Pacific-timezone Mac).
-        The split marks exactly where the human intervened.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
-        <span><strong class="text-ink">The speed has a simple explanation.</strong> Commits land roughly every
-        nine seconds because the agent writes and commits <em>without compiling</em>. Verification is
-        asynchronous — pushed off to CI and to dedicated fix-up branches.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-concern"></span>
-        <span><strong class="text-ink">The hard questions remain open.</strong> Code quality, the 14,000+
-        unsafe blocks still in the tree, and whether a 1M-line change with no human line-by-line review can be
-        meaningfully audited — none of that is settled by the commit history alone.</span>
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-rust"></span>
+        <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,635 commits are
+        <span class="mono">+0000</span> UTC (Claude Code's automated environment); 38 are <span class="mono">-0700</span>
+        Pacific (Jarred Sumner on his Mac). The split marks exactly where the human intervened.</span>
       </li>
     </ul>
   </div>
 </section>
 
-<!-- ============ 3. THE CLAIM ============ -->
-<section id="claim" class="bg-surface">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Background</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">The Claim</h2>
-    <div class="space-y-5 text-lg leading-relaxed text-slate-700">
-      <p>
-        Bun's creator, <strong class="text-ink">Jarred Sumner</strong>, has been increasingly public about a
-        shift in how the runtime is built: that AI now writes essentially all of the code. PR&nbsp;#30412 is the
-        clearest expression of that claim to date — a complete reimplementation of Bun's Zig core in Rust,
-        attributed end to end to Anthropic's <strong class="text-ink">Claude&nbsp;Code</strong> agent. Sumner's
-        framing was blunt: the human role is direction and review, not authorship.
-      </p>
-      <p>
-        Coverage in <strong class="text-ink">The Register</strong> and elsewhere amplified the headline number —
-        a million-plus lines of a memory-safe rewrite, landed in a window measured in days — and treated it as a
-        milestone moment for autonomous coding agents. Anthropic, for its part, has demonstrated Claude&nbsp;Code
-        running long-horizon engineering tasks with sub-agents, CI integration, and self-triage of failures: the
-        exact pattern the PR's branch topology shows.
-      </p>
-      <p>
-        That is the story as told. The rest of this page is the story as the git history actually records it —
-        no press release, no speculation, just what 6,755 commits reveal when you read every one of them.
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 4. METHODOLOGY ============ -->
-<section id="methodology" class="bg-white">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Methodology</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">What We Found — and How</h2>
-    <div class="rounded-2xl border border-slate-200 bg-surface p-6 sm:p-8">
-      <p class="text-base text-slate-600 mb-6">
-        Everything below is derived from public GitHub data. The process was deliberately mechanical so that any
-        claim here can be independently re-checked:
-      </p>
-      <ul class="space-y-4 text-base text-slate-700">
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">01</span>
-          <span><strong>Cloned the repo</strong> as a blobless clone — about 56&nbsp;MB — enough to walk the full
-          commit graph without pulling every file blob.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">02</span>
-          <span><strong>Extracted all 6,755 commits</strong> via <span class="mono">git log</span>, capturing
-          SHA, author, committer, both timestamps, message, and parent SHAs.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">03</span>
-          <span><strong>Compared author vs. committer timestamps</strong> for every single commit — the
-          definitive test for whether history was rebased or rewritten after the fact.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">04</span>
-          <span><strong>Sampled raw git objects</strong> with <span class="mono">git cat-file -p</span> to confirm
-          the commit objects are well-formed and not synthetic.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">05</span>
-          <span><strong>Analyzed the parent chain</strong> to separate linear commits from merge commits, and
-          mapped which branches merged into the PR branch and how often.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">06</span>
-          <span><strong>Inspected diff sizes per inter-commit gap bucket</strong> — to see whether fast commits
-          carry small diffs (write-only) or large diffs (something else).</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">07</span>
-          <span><strong>Extracted raw timezone offsets</strong> from every git commit object via <span
-          class="mono">git cat-file -p</span>, separating the <span class="mono">+0000</span> automated commits
-          from the <span class="mono">-0700</span> human commits to identify where Jarred intervened
-          directly.</span>
-        </li>
-      </ul>
-      <p class="text-sm text-slate-500 mt-6 pt-6 border-t border-slate-200">
-        No speculation about intent. Where the data is ambiguous, this page says so explicitly. The analysis
-        scripts live alongside this page in the repository.
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 5. TIMELINE ============ -->
-<section id="timeline" class="bg-surface">
+<!-- ============ AGENT ARCHITECTURE ============ -->
+<section id="architecture" class="bg-surface">
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 01</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Timeline</h2>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Agent Architecture</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The commit timestamps make it look like the work happened in a blur. The calendar tells a more grounded
-      story.
-    </p>
-
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits per day</h3>
-      <p class="text-xs text-slate-500 mb-4">May 4 &ndash; May 14, 2026 &middot; n = 6,755</p>
-      <div class="chart-box" style="height: 360px;">
-        <canvas id="chartCommitsPerDay"></canvas>
-      </div>
-    </div>
-
-    <div class="grid sm:grid-cols-2 gap-4 mt-6">
-      <div class="rounded-xl border-l-4 border-ai bg-white p-5">
-        <div class="text-xs font-bold uppercase tracking-wide text-ai mb-1">May 06 &middot; Peak</div>
-        <p class="text-sm text-slate-700"><strong>2,906 commits in a single day</strong> — the Phase&nbsp;D/E
-        bulk porting window, where mechanical Zig&rarr;Rust translation ran flat out.</p>
-      </div>
-      <div class="rounded-xl border-l-4 border-caution bg-white p-5">
-        <div class="text-xs font-bold uppercase tracking-wide text-caution mb-1">May 10 &middot; The Gap</div>
-        <p class="text-sm text-slate-700"><strong>Only 47 commits</strong> — a visible trough that reads as a
-        compile-and-test cycle: the agent waiting on verification rather than generating.</p>
-      </div>
-    </div>
-
-    <div class="mt-8 space-y-4 text-lg leading-relaxed text-slate-700">
-      <p>
-        The real span is <strong class="text-ink">9.8 days</strong>, May&nbsp;4 through May&nbsp;14 — not the
-        "hours" that a naive read of the densely-packed commit timestamps might suggest. Code started flowing on
-        <strong class="text-ink">May&nbsp;4</strong>, four days <em>before</em> the PR was even opened on
-        <strong class="text-ink">May&nbsp;8</strong>. The PR was then merged on <strong
-        class="text-ink">May&nbsp;14</strong>.
-      </p>
-      <p>
-        That ordering matters. The PR is the visible tip; the work behind it had a substantial running start.
-        The two highest-volume days, May&nbsp;6 and May&nbsp;7, account for nearly 4,500 commits between them —
-        two-thirds of the entire effort compressed into 48 hours of the porting phases.
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 6. AGENT ARCHITECTURE ============ -->
-<section id="architecture" class="bg-white">
-  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 02</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Agent Architecture</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      This is the most revealing part of the history. The PR was not one agent typing in a straight line — it
-      was a main porting branch with a fleet of specialized sub-agent branches feeding fixes back into it.
+      The PR was not one agent typing in a straight line &mdash; it was a main porting branch with a fleet of
+      specialized sub-agent branches feeding fixes back into it.
     </p>
 
     <!-- Branch topology diagram -->
     <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto">
       <div class="mono text-xs sm:text-sm leading-relaxed min-w-[560px]">
-        <div class="text-white/50 mb-4">// branch topology — sub-agents merge INTO the PR branch</div>
+        <div class="text-white/50 mb-4">// branch topology &mdash; sub-agents merge INTO the PR branch</div>
 
-        <div class="flex items-center gap-3 mb-1">
-          <span class="text-verified font-bold">claude/phase-a-port</span>
+        <div class="flex items-center gap-3 mb-2">
+          <span class="inline-flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-verified"></span>
+            <span class="text-verified font-bold">claude/phase-a-port</span>
+          </span>
           <span class="text-white/40">&larr; the PR branch (main line of work)</span>
         </div>
         <div class="text-white/20 ml-2">│</div>
@@ -329,50 +344,50 @@
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">├──&lt;</span>
           <span class="text-ai font-semibold">claude/unsafe-5k</span>
-          <span class="text-caution font-bold">×27</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×27</span>
           <span class="text-white/50">unsafe-block elimination campaign</span>
         </div>
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">├──&lt;</span>
           <span class="text-ai font-semibold">claude/bench-until-green</span>
-          <span class="text-caution font-bold">×19</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×19</span>
           <span class="text-white/50">continuous benchmark-tuning loop</span>
         </div>
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">├──&lt;</span>
           <span class="text-ai font-semibold">claude/flaky-stabilize*</span>
-          <span class="text-caution font-bold">×3</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×3</span>
           <span class="text-white/50">flaky-test repair</span>
         </div>
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">├──&lt;</span>
           <span class="text-ai font-semibold">claude/ci-auto-fix-{N}</span>
-          <span class="text-caution font-bold">×4</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×4</span>
           <span class="text-white/50">automated CI-failure handling</span>
         </div>
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">├──&lt;</span>
           <span class="text-ai font-semibold">claude/divergence-fix-all</span>
-          <span class="text-caution font-bold">×2</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×2</span>
           <span class="text-white/50">Zig&rarr;Rust spec-correctness fixes</span>
         </div>
         <div class="flex items-start gap-2 ml-2">
           <span class="text-white/30">└──&lt;</span>
           <span class="text-ai font-semibold">claude/security-audit-patches</span>
-          <span class="text-caution font-bold">×1</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×1</span>
           <span class="text-white/50">security review</span>
         </div>
 
-        <div class="text-white/50 mt-4">// every branch is namespaced <span class="text-ai">claude/*</span> — 276 merge commits total</div>
+        <div class="text-white/50 mt-4">// every branch is namespaced <span class="text-ai">claude/*</span> &mdash; 276 merge commits total</div>
       </div>
     </div>
     <p class="text-sm text-slate-500 mt-3">
-      Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main
-      port branch — the campaign re-ran until its goal condition was met.
+      Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main port
+      branch &mdash; the campaign re-ran until its goal condition was met.
     </p>
 
     <!-- Phase breakdown chart -->
-    <div class="rounded-2xl border border-slate-200 bg-surface p-5 sm:p-7 mt-10">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 mt-10">
       <h3 class="text-sm font-bold text-slate-700 mb-1">Commits by phase</h3>
       <p class="text-xs text-slate-500 mb-4">Where the 6,755 commits actually went</p>
       <div class="chart-box" style="height: 340px;">
@@ -383,53 +398,56 @@
     <!-- Phase glossary -->
     <h3 class="text-xl font-black tracking-tight mt-10 mb-4">What each phase means</h3>
     <div class="grid sm:grid-cols-2 gap-4">
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-b — gating &amp; verify</div>
-        <p class="text-sm text-slate-600">Wrapping Zig types behind Rust gates and verifying correctness one
-        tier at a time before opening the floodgates.</p>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-a &mdash; initial bulk drafts</div>
+        <p class="text-sm text-slate-600">May 04&ndash;05. The initial bulk-drafting phase, where the AI generated
+        large translation batches &mdash; 12 to 90 files per commit &mdash; before the structured sequential phases
+        began. The runway, before the engineering plan formalized.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-c — cleanup passes</div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-b &mdash; gating &amp; verify</div>
+        <p class="text-sm text-slate-600">Wrapping Zig types behind Rust gates and verifying correctness one tier at
+        a time before opening the floodgates.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-c &mdash; cleanup passes</div>
         <p class="text-sm text-slate-600">Intermediate sweeps that tidy the tree between the heavy structural
         phases.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-d — the core port</div>
-        <p class="text-sm text-slate-600">The mechanical Zig&rarr;Rust translation of <span
-        class="mono">bun_runtime</span>, the bundler, unsafe blocks, and TODO items. The single largest phase.</p>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-d &mdash; the core port</div>
+        <p class="text-sm text-slate-600">The mechanical Zig&rarr;Rust translation of <span class="mono">bun_runtime</span>,
+        the bundler, unsafe blocks, and TODO items. The single largest phase.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-e — RAII conversion</div>
-        <p class="text-sm text-slate-600">Giving Rust ownership to resources that Zig managed by hand —
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-e &mdash; RAII conversion</div>
+        <p class="text-sm text-slate-600">Giving Rust ownership of resources that Zig managed by hand &mdash;
         translating manual lifecycles into RAII patterns.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-f — further cleanup</div>
-        <p class="text-sm text-slate-600">A second cleanup wave after RAII conversion settles the ownership
-        model.</p>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-f &mdash; further cleanup</div>
+        <p class="text-sm text-slate-600">A second cleanup wave after RAII conversion settles the ownership model.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-g — harvest</div>
-        <p class="text-sm text-slate-600">Collecting and cataloging remaining work — building the to-do list
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-g &mdash; harvest</div>
+        <p class="text-sm text-slate-600">Collecting and cataloging remaining work &mdash; building the to-do list
         for the final phase.</p>
       </div>
-      <div class="rounded-xl border border-slate-200 bg-surface p-5 sm:col-span-2">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-h — unsafe-wrap</div>
-        <p class="text-sm text-slate-600">Systematic wrapping of the 14,000+ remaining <span
-        class="mono">unsafe</span> sites — the long tail of memory-safety work that a Rust rewrite is supposed
-        to be <em>about</em>. It is here that the open questions get sharpest.</p>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-h &mdash; unsafe-wrap</div>
+        <p class="text-sm text-slate-600">Systematic wrapping of the 14,000+ remaining <span class="mono">unsafe</span>
+        sites &mdash; the long tail of memory-safety work that a Rust rewrite is supposed to be <em>about</em>.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 7. ENGINEERING PLAN ============ -->
-<section id="engineering" class="bg-surface">
+<!-- ============ ENGINEERING PLAN ============ -->
+<section id="engineering" class="bg-white">
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 03</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Engineering Plan</h2>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Engineering Plan</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The most revealing finding is not the commit velocity — it is what the agent did before writing a single
+      The most revealing finding is not commit velocity &mdash; it is what the agent did before writing a single
       line of Rust.
     </p>
 
@@ -443,9 +461,9 @@
         <div><span class="text-white/50">// Compute crate DAG, intended tiers, and back-edges for Phase B-0.</span></div>
         <div><span class="text-blue-300">import</span> { readdirSync, readFileSync } <span class="text-blue-300">from</span> <span class="text-green-300">"node:fs"</span>;</div>
         <div class="mt-2"><span class="text-blue-300">const</span> TIER: Record&lt;string, number&gt; = {</div>
-        <div class="ml-4">bun_core: 0, bun_alloc: 0, wyhash: 0, <span class="text-white/40">// T0 — zero-dep primitives</span></div>
-        <div class="ml-4">js_parser: 4, bundler: 5,              <span class="text-white/40">// T4/T5 — heavy subsystems</span></div>
-        <div class="ml-4">bun_jsc: 6, napi: 6, shell: 6,         <span class="text-white/40">// T6 — top-level runtime</span></div>
+        <div class="ml-4">bun_core: 0, bun_alloc: 0, wyhash: 0, <span class="text-white/40">// T0 &mdash; zero-dep primitives</span></div>
+        <div class="ml-4">js_parser: 4, bundler: 5,              <span class="text-white/40">// T4/T5 &mdash; heavy subsystems</span></div>
+        <div class="ml-4">bun_jsc: 6, napi: 6, shell: 6,         <span class="text-white/40">// T6 &mdash; top-level runtime</span></div>
         <div>};</div>
       </div>
       <p class="text-white/60 text-sm mt-4">Commit message: <span class="text-caution font-semibold">phase-b0: add crate DAG analyzer</span></p>
@@ -453,86 +471,60 @@
 
     <p class="text-lg leading-relaxed text-slate-700 mb-10">
       Before touching a single source file, the agent wrote a <strong class="text-ink">175-line TypeScript
-      program</strong> that maps the entire codebase: 96 crates, their intended dependency tiers (T0
-      zero-dep primitives through T6 subsystems), and which imports create cycles. You cannot safely extract a
-      monolith into a multi-crate Cargo workspace without knowing the dependency graph first. The agent built
-      its own instrumentation — then three <span class="mono">docs:</span> commits specifying cycle-breaking
-      and dispatch strategies — before writing any migration code at all.
+      program</strong> that maps the entire codebase: 96 crates, their intended dependency tiers (T0 zero-dep
+      primitives through T6 subsystems), and which imports create cycles. You cannot safely extract a monolith into
+      a multi-crate Cargo workspace without knowing the dependency graph first.
     </p>
 
-    <!-- 9-step migration plan -->
-    <h3 class="text-xl font-black tracking-tight mb-6">The migration playbook — reconstructed from the commit history</h3>
-    <div class="space-y-2">
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">1</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Instrument</div>
-          <p class="text-sm text-slate-600 mt-0.5">Write <span class="mono">crate-dag.ts</span> — compute the full dependency DAG, assign tiers, identify cycles before touching anything.</p>
-        </div>
+    <!-- Visual horizontal pipeline -->
+    <h3 class="text-xl font-black tracking-tight mb-5">The migration pipeline</h3>
+    <div class="pipeline mb-3">
+      <div class="pipe-step">
+        <span class="pipe-num">1</span>
+        <span class="pipe-name">Instrument</span>
+        <span class="pipe-desc">Build the crate-DAG analyzer to map cycles &amp; tiers.</span>
+        <span class="pipe-metric">175-line tool</span>
       </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">2</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Spec</div>
-          <p class="text-sm text-slate-600 mt-0.5">Write design docs (<span class="mono">docs: Dispatch</span>, <span class="mono">docs: CYCLEBREAK.md</span>, <span class="mono">docs: Concurrency</span>) — the cross-crate dispatch strategy and cycle-breaking spec, committed before any code moves.</p>
-        </div>
+      <div class="pipe-step">
+        <span class="pipe-num">2</span>
+        <span class="pipe-name">Spec</span>
+        <span class="pipe-desc">Write design docs for dispatch, cycle-break, concurrency.</span>
+        <span class="pipe-metric">3 docs: commits</span>
       </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">3</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Break cycles — DELETE pass</div>
-          <p class="text-sm text-slate-600 mt-0.5">Remove 99 spurious back-edge imports across 67 files that would create cycles in the new workspace. Cycle-breaking before extraction is the hard prerequisite.</p>
-        </div>
+      <div class="pipe-step">
+        <span class="pipe-num">3</span>
+        <span class="pipe-name">Break Cycles</span>
+        <span class="pipe-desc">Delete spurious back-edges before extraction.</span>
+        <span class="pipe-metric">99 edits / 67 files</span>
       </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">4</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Move-out passes</div>
-          <p class="text-sm text-slate-600 mt-0.5">Relocate verified-clean crates to their tiers in three passes: 36 crates, then 4 fixed crates, then a final 4. "36 crates" was independently confirmed: exactly 36 distinct <span class="mono">src/</span> subdirectories in the diff.</p>
-        </div>
+      <div class="pipe-step">
+        <span class="pipe-num">4</span>
+        <span class="pipe-name">Extract</span>
+        <span class="pipe-desc">Move verified crates to their tier locations.</span>
+        <span class="pipe-metric">44 crates moved</span>
       </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">5</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Move-in pass</div>
-          <p class="text-sm text-slate-600 mt-0.5">Pull 579 symbols into 33 target crates, consolidating the symbol graph after the structural moves.</p>
-        </div>
+      <div class="pipe-step">
+        <span class="pipe-num">5</span>
+        <span class="pipe-name">Scaffold</span>
+        <span class="pipe-desc">Generate Cargo workspace with one manifest per crate.</span>
+        <span class="pipe-metric">96 manifests</span>
       </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">6</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Collapse tier-6</div>
-          <p class="text-sm text-slate-600 mt-0.5">Fold <span class="mono">bake</span>, <span class="mono">shell</span>, <span class="mono">test_runner</span>, <span class="mono">cli</span>, and <span class="mono">napi</span> into <span class="mono">runtime/</span> — the top-level crate boundary.</p>
-        </div>
-      </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">7</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Scaffold the Cargo workspace</div>
-          <p class="text-sm text-slate-600 mt-0.5">One commit, 151 files, +3,184 lines, zero deletions: 96 per-crate <span class="mono">Cargo.toml</span> manifests plus the root workspace manifest, plus 52 autogenerated <span class="mono">lib.rs</span> files. "96 crates" confirmed exactly — 96 member manifests.</p>
-        </div>
-      </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">8</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Prune back-edge deps</div>
-          <p class="text-sm text-slate-600 mt-0.5">Remove back-edge dependencies from the generated manifests to enforce workspace acyclicity — the Cargo resolver requires a DAG.</p>
-        </div>
-      </div>
-      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
-        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">9</span>
-        <div>
-          <div class="font-bold text-ink text-sm">Compile bottom-up — one crate per commit</div>
-          <p class="text-sm text-slate-600 mt-0.5">Start from the lowest-tier crates and compile upward. Each commit corresponds to one crate reaching "compiles clean." Fix errors, commit, move to the next tier.</p>
-        </div>
+      <div class="pipe-step">
+        <span class="pipe-num">6</span>
+        <span class="pipe-name">Compile&nbsp;&uarr;</span>
+        <span class="pipe-desc">Compile crate-by-crate from lowest tier upward.</span>
+        <span class="pipe-metric">bottom-up per tier</span>
       </div>
     </div>
+    <p class="text-sm text-slate-500 mb-12">
+      Six steps, executed in order, all visible in the commit history.
+    </p>
 
     <!-- phase-b1 compile cadence -->
-    <h3 class="text-xl font-black tracking-tight mt-12 mb-4">Phase-b1 — the compile loop in real time</h3>
+    <h3 class="text-xl font-black tracking-tight mt-2 mb-4">Phase-b1 &mdash; the compile loop in real time</h3>
     <p class="text-base text-slate-700 leading-relaxed mb-5">
-      The phase-b1 commit timestamps tell their own story. Each commit is exactly one crate reaching green —
-      and the inter-commit gaps are irregular in a telling way:
+      Each phase-b1 commit is exactly one crate reaching green &mdash; and the inter-commit gaps are irregular
+      in a telling way:
     </p>
     <div class="overflow-x-auto rounded-2xl border border-slate-200">
       <table class="w-full text-left text-sm">
@@ -544,7 +536,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200 bg-white mono text-xs sm:text-sm">
-          <tr><td class="px-4 py-2.5 text-slate-500">04:09:11</td><td class="px-4 py-2.5 text-ink">scaffold Cargo workspace (96 crates)</td><td class="px-4 py-2.5 text-right text-slate-400">—</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:09:11</td><td class="px-4 py-2.5 text-ink">scaffold Cargo workspace (96 crates)</td><td class="px-4 py-2.5 text-right text-slate-400">&mdash;</td></tr>
           <tr><td class="px-4 py-2.5 text-slate-500">04:10:21</td><td class="px-4 py-2.5 text-ink">prune back-edge deps from Cargo.toml</td><td class="px-4 py-2.5 text-right text-slate-500">+70s</td></tr>
           <tr class="bg-concern/5"><td class="px-4 py-2.5 text-slate-500">04:14:12</td><td class="px-4 py-2.5 text-ink font-semibold">bun_alloc compiles</td><td class="px-4 py-2.5 text-right text-concern font-bold">+231s</td></tr>
           <tr class="bg-concern/5"><td class="px-4 py-2.5 text-slate-500">04:17:40</td><td class="px-4 py-2.5 text-ink font-semibold">bun_core compiles</td><td class="px-4 py-2.5 text-right text-concern font-bold">+208s</td></tr>
@@ -562,511 +554,187 @@
     </div>
     <div class="rounded-xl bg-ai/5 border border-ai/30 p-5 mt-5">
       <p class="text-base text-slate-700 leading-relaxed">
-        <span class="text-concern font-bold">231 seconds</span> for <span class="mono">bun_alloc</span> (the foundational allocator, hardest),
-        <span class="text-verified font-bold">34 seconds</span> for <span class="mono">windows_sys</span> (small, mostly declarations) —
-        the gaps are <strong class="text-ink">irregular and proportional to crate complexity</strong>.
-        A scripted replay of pre-generated commits would produce uniform or pinned timestamps. This batch reads as
-        a genuine <em>compile → read errors → fix → recompile</em> loop — the one batch in the forensic sample
-        whose timestamps appear organic rather than automated.
+        <span class="text-concern font-bold">231 seconds</span> for <span class="mono">bun_alloc</span>
+        (foundational allocator, hardest), <span class="text-verified font-bold">34 seconds</span> for
+        <span class="mono">windows_sys</span> (small, mostly declarations) &mdash; gaps are
+        <strong class="text-ink">irregular and proportional to crate complexity</strong>. A scripted replay
+        would produce uniform timestamps. This batch reads as a genuine
+        <em>compile&rarr;read errors&rarr;fix&rarr;recompile</em> loop.
       </p>
     </div>
   </div>
 </section>
 
-<!-- ============ 8. TIMEZONE FORENSICS ============ -->
+<!-- ============ TIMELINE ============ -->
+<section id="timeline" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Timeline</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      The commit timestamps make it look like the work happened in a blur. The calendar tells a more grounded
+      story.
+    </p>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits per day</h3>
+      <p class="text-xs text-slate-500 mb-4">May 04 &ndash; May 14, 2026 &middot; n = 6,755</p>
+      <div class="chart-box" style="height: 360px;">
+        <canvas id="chartCommitsPerDay"></canvas>
+      </div>
+    </div>
+
+    <!-- Day-by-day summary table -->
+    <h3 class="text-xl font-black tracking-tight mt-10 mb-4">Day-by-day</h3>
+    <div class="overflow-x-auto rounded-2xl border border-slate-200">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-ink text-white">
+          <tr>
+            <th class="px-4 py-3 font-semibold w-32">Date</th>
+            <th class="px-4 py-3 font-semibold">What happened</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white">
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 04</td><td class="px-4 py-3 text-slate-700">Phase A &mdash; initial AI draft batches. 20 commits, 12&ndash;90 files each. Work begins.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 05</td><td class="px-4 py-3 text-slate-700">Phase B2 &mdash; verify gates, tier sweeps, cycle fixes. 74 commits.</td></tr>
+          <tr class="bg-ai/5"><td class="px-4 py-3 font-bold text-ai mono">May 06</td><td class="px-4 py-3 text-slate-700"><strong class="text-ink">PEAK</strong> &mdash; Phase E bulk porting of runtime modules. 2,906 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 07</td><td class="px-4 py-3 text-slate-700">Phase F/G &mdash; merge campaigns, builder daemon, cleanup. 1,568 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 08</td><td class="px-4 py-3 text-slate-700">Phase D &mdash; seam removal (Zig&rarr;Rust bridge layers). Jarred wires CMake build. 724 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 09</td><td class="px-4 py-3 text-slate-700">Phase H &mdash; Windows-specific porting. 269 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 10</td><td class="px-4 py-3 text-slate-700">Slow day &mdash; Jarred's architectural decisions, test stabilization. 47 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 11</td><td class="px-4 py-3 text-slate-700">Safety &mdash; noalias, unsafe reduction, CI flake fixes. 285 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 12</td><td class="px-4 py-3 text-slate-700">Perf &mdash; benchmark campaign (bench-until-green ×19). 675 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 13</td><td class="px-4 py-3 text-slate-700">Tests + docs &mdash; cleanup, remove internal porting notes. 171 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 14</td><td class="px-4 py-3 text-slate-700">Final build fixes, merge to main. 16 commits.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Heatmap visualization -->
+    <h3 class="text-xl font-black tracking-tight mt-12 mb-2">Commit heatmap &mdash; 5-minute buckets</h3>
+    <p class="text-sm text-slate-500 mb-5">Click a day to switch. Each cell is one 5-minute bucket; darker = more commits. Hover for details.</p>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div id="heat-tabs" class="heat-tabs" role="tablist"></div>
+      <div class="heat-grid-wrap">
+        <table class="heat-grid" id="heat-grid"></table>
+      </div>
+      <div class="heat-legend">
+        <span>fewer</span>
+        <span class="swatch" style="background: rgba(124,58,237,0);"></span>
+        <span class="swatch" style="background: rgba(124,58,237,0.15);"></span>
+        <span class="swatch" style="background: rgba(124,58,237,0.4);"></span>
+        <span class="swatch" style="background: rgba(124,58,237,0.7);"></span>
+        <span class="swatch" style="background: rgba(124,58,237,1.0);"></span>
+        <span>more</span>
+      </div>
+    </div>
+    <div class="heat-tooltip" id="heat-tooltip"></div>
+  </div>
+</section>
+
+<!-- ============ AI vs HUMAN ============ -->
 <section id="forensics" class="bg-white">
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 04</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The AI vs. Human Boundary</h2>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">AI vs. Human</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      Every git commit object encodes the author's timezone offset. In a 6,755-commit history, that single
-      field draws the sharpest possible line between machine and human.
+      Every git commit object encodes the author's timezone offset. In a 6,755-commit history, that single field
+      draws the sharpest possible line between machine and human.
     </p>
 
     <!-- Timezone split -->
-    <div class="grid sm:grid-cols-2 gap-5 mb-10">
+    <div class="grid sm:grid-cols-2 gap-5 mb-8">
       <div class="rounded-2xl border-2 border-ai bg-ai/5 p-6 sm:p-8">
         <div class="text-5xl sm:text-6xl font-black text-ai tabular-nums mb-2">6,635</div>
         <div class="mono text-xl font-bold text-ink mb-3">author tz: +0000</div>
-        <p class="text-sm text-slate-600 leading-relaxed">Claude Code's automated harness runs in UTC. There is
-        no local timezone because there is no human at a machine — just an agent loop with a system clock.</p>
+        <p class="text-sm text-slate-600 leading-relaxed">Claude Code's automated harness runs in UTC. There is no
+        local timezone because there is no human at a machine &mdash; just an agent loop with a system clock.</p>
       </div>
       <div class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-6 sm:p-8">
         <div class="text-5xl sm:text-6xl font-black text-slate-600 tabular-nums mb-2">38</div>
         <div class="mono text-xl font-bold text-ink mb-3">author tz: -0700</div>
-        <p class="text-sm text-slate-600 leading-relaxed">Jarred Sumner, committing directly from his Mac.
-        Pacific Standard Time — consistent with every other commit he has ever made in this repository.</p>
+        <p class="text-sm text-slate-600 leading-relaxed">Jarred Sumner, committing directly from his Mac. Pacific
+        time &mdash; consistent with every other commit he has ever made in this repository.</p>
       </div>
     </div>
 
-    <p class="text-lg leading-relaxed text-slate-700 mb-8">
+    <p class="text-base text-slate-700 leading-relaxed">
       Jarred's entire pre-PR commit history on <span class="mono">oven-sh/bun</span> is overwhelmingly
-      <span class="mono">-0700</span> or <span class="mono">-0800</span> (Pacific, standard and daylight saving).
-      The entire PR's 6,635 commits depart from that pattern uniformly — the fingerprint of an automated,
-      timezone-agnostic environment. The 38 <span class="mono">-0700</span> commits are the moments where
-      Jarred reached in himself.
-    </p>
-
-    <!-- What Jarred's 38 commits were -->
-    <h3 class="text-xl font-black tracking-tight mb-5">What Jarred's 38 manual commits look like</h3>
-    <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto mb-6">
-      <div class="mono text-xs sm:text-sm leading-relaxed min-w-[520px]">
-        <div class="text-white/40 mb-4">// -0700 commits — Jarred direct, by category</div>
-        <div class="space-y-1">
-          <div class="text-caution font-bold text-xs uppercase tracking-wide mb-2">May 08 — Build infrastructure</div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: wire Rust crates into Bun's CMake build system</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: add link_interface! macro for cross-crate FFI symbols (×N)</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: merge main into port branch (sync upstream changes)</span></div>
-          <div class="text-caution font-bold text-xs uppercase tracking-wide mt-4 mb-2">May 10–14 — Architectural decisions &amp; reverts</div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Unify AST data types into bun_ast crate</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Ensure strings match up (byte-exact Zig/Rust parity)</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Make three.js bench declare deps (benchmark integrity)</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">revert: revert "phase-h: unsafe-wrap r3" (phase went wrong)</span></div>
-          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">debug: add debug assertions for invariant checks</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid sm:grid-cols-3 gap-4">
-      <div class="rounded-xl bg-surface border border-slate-200 p-5">
-        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Build wiring</div>
-        <p class="text-sm text-slate-600">Hooking the new Rust crates into Bun's existing CMake build system — the kind of system-level plumbing that requires intimate knowledge of the build toolchain.</p>
-      </div>
-      <div class="rounded-xl bg-surface border border-slate-200 p-5">
-        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Architectural decisions</div>
-        <p class="text-sm text-slate-600">AST unification, string normalization, benchmark dependency declarations — judgment calls that set constraints the AI then had to work within.</p>
-      </div>
-      <div class="rounded-xl bg-surface border border-slate-200 p-5">
-        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Reverts</div>
-        <p class="text-sm text-slate-600">When a phase produced results Jarred didn't accept, he reverted it directly. The revert commits are themselves the evidence of human quality control.</p>
-      </div>
-    </div>
-
-    <p class="text-base text-slate-600 leading-relaxed mt-8">
-      The pattern is clean: the AI handled the mechanical translation at scale; the human handled build
-      infrastructure, high-level architectural decisions, and the judgment calls that determined when a phase
-      was acceptable. The timezone split is not absolute — an agent can commit with any timezone if configured —
-      but it is consistent throughout, and consistent with every other signal in the history.
+      <span class="mono">-0700</span> or <span class="mono">-0800</span>. The PR's 6,635 commits depart from that
+      pattern uniformly &mdash; the fingerprint of an automated, timezone-agnostic environment. The 38
+      <span class="mono">-0700</span> commits are the moments where Jarred reached in himself: build wiring,
+      architectural decisions, and reverts. The split is not absolute &mdash; an agent can commit with any timezone
+      if configured &mdash; but it is consistent throughout, and consistent with every other signal in the history.
     </p>
   </div>
 </section>
 
-<!-- ============ 9. COMMIT SPEED PARADOX ============ -->
+<!-- ============ SPEED PARADOX ============ -->
 <section id="paradox" class="bg-surface">
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 05</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Commit-Speed Paradox</h2>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      A commit every nine seconds is impossible if each commit includes a Rust compile. So either the timeline
-      is fake — or the agent is not compiling between commits. The data points firmly at the second one.
+      A commit every nine seconds is impossible if each commit includes a Rust compile. The data points firmly at
+      the simpler answer: the agent is not compiling between commits.
     </p>
 
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-      <h3 class="text-sm font-bold text-slate-700 mb-1">Inter-commit gap distribution</h3>
-      <p class="text-xs text-slate-500 mb-4">Time between consecutive commits &middot; n = 6,754 gaps</p>
-      <div class="chart-box" style="height: 320px;">
-        <canvas id="chartGaps"></canvas>
-      </div>
-      <div class="flex flex-wrap gap-4 mt-4 text-xs text-slate-500">
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-verified inline-block"></span>fast — pure write, no compile</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-caution inline-block"></span>medium</span>
-        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-concern inline-block"></span>long — likely compile + test</span>
-      </div>
-    </div>
+    <p class="text-lg text-slate-700 leading-relaxed mb-8">
+      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
+      inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
+    </p>
 
-    <div class="grid md:grid-cols-2 gap-6 mt-8">
-      <div>
-        <h3 class="text-lg font-black mb-3">What you'd expect</h3>
-        <p class="text-base text-slate-700 leading-relaxed">
-          A sane per-commit cycle for a Rust project: write the code (~1&nbsp;min), compile (3&ndash;10&nbsp;min
-          for a large crate graph), run the relevant tests (~30&nbsp;s). That is <strong
-          class="text-ink">5&ndash;12 minutes</strong> per commit, minimum.
-        </p>
-      </div>
-      <div>
-        <h3 class="text-lg font-black mb-3">What actually happened</h3>
-        <p class="text-base text-slate-700 leading-relaxed">
-          <strong class="text-ink">74% of commits land in under 30 seconds.</strong> More than 4,400 of the
-          6,754 gaps are 30&nbsp;seconds or shorter. There is simply no compile happening inside that window.
-        </p>
-      </div>
-    </div>
-
-    <!-- Resolution -->
-    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8 mt-8">
-      <h3 class="text-xl font-black text-ink mb-4">The resolution: write and verify are decoupled</h3>
-      <p class="text-base text-slate-700 leading-relaxed mb-5">
-        The agent does not gate each commit on compilation. It runs two loops at completely different speeds:
-      </p>
-
-      <!-- Two-loop diagram -->
+    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8">
+      <h3 class="text-xl font-black text-ink mb-5">Write and verify run on different clocks</h3>
       <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
         <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
           <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
           <div class="text-2xl font-black text-ink mb-1">~9s median</div>
-          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span
-          class="mono">git commit</span>. No compilation. Just write and record.</p>
+          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span class="mono">git commit</span>.
+          No compilation. Just write and record.</p>
         </div>
         <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
         <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
           <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
           <div class="text-2xl font-black text-ink mb-1">hours</div>
-          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span
-          class="mono">ci-auto-fix</span>, <span class="mono">divergence-fix</span>) repair them &rarr; merge
-          back.</p>
+          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span class="mono">ci-auto-fix</span>,
+          <span class="mono">divergence-fix</span>) repair them &rarr; merge back.</p>
         </div>
       </div>
-
-      <ul class="mt-6 space-y-3 text-base text-slate-700">
-        <li class="flex gap-3">
-          <span class="text-ai font-bold shrink-0">&rarr;</span>
-          <span>Nine seconds is roughly the <strong>inference time</strong> for ~430 output tokens at
-          ~150&nbsp;tok/s — it is generation latency, not build latency.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-ai font-bold shrink-0">&rarr;</span>
-          <span>The diff sizes corroborate it: commits in the 0&ndash;5&nbsp;second band average just
-          <strong>60&ndash;72 lines changed across 1&ndash;3 files</strong> — exactly what one focused
-          generation step produces.</span>
-        </li>
-        <li class="flex gap-3">
-          <span class="text-ai font-bold shrink-0">&rarr;</span>
-          <span>The longer-gap commits (the red band) are where compile-and-test feedback actually lands —
-          and those are the minority.</span>
-        </li>
-      </ul>
-    </div>
-
-    <p class="text-base text-slate-600 mt-6 leading-relaxed">
-      So the "impossible" speed is real and also mundane. The history is not fabricated. The agent simply
-      treats compilation as an <em>asynchronous</em> concern handled by a separate loop — which is efficient,
-      and also exactly why the open questions about correctness exist.
-    </p>
-  </div>
-</section>
-
-<!-- ============ 8. TOKEN MATH ============ -->
-<section id="tokens" class="bg-white">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 06</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Token Math</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      Does the volume even add up for a single agent? Run the back-of-envelope numbers and it does — with room
-      to spare.
-    </p>
-
-    <div class="overflow-x-auto rounded-2xl border border-slate-200">
-      <table class="w-full text-left text-sm sm:text-base">
-        <thead class="bg-ink text-white">
-          <tr>
-            <th class="px-5 py-3 font-semibold">Quantity</th>
-            <th class="px-5 py-3 font-semibold">Calculation</th>
-            <th class="px-5 py-3 font-semibold text-right">Result</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200 bg-white">
-          <tr>
-            <td class="px-5 py-4 font-medium text-ink">Output tokens</td>
-            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">1,009,257 lines &times; 6 tokens/line</td>
-            <td class="px-5 py-4 text-right font-bold tabular-nums">~6.1M tokens</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-4 font-medium text-ink">Pure generation time</td>
-            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">6.1M &divide; 150 tok/s (single Sonnet)</td>
-            <td class="px-5 py-4 text-right font-bold tabular-nums">~11.2 hours</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-4 font-medium text-ink">Effective throughput</td>
-            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">11.2h of work &divide; 235h real span</td>
-            <td class="px-5 py-4 text-right font-bold tabular-nums">~7 tok/s &middot; 4.7% duty cycle</td>
-          </tr>
-          <tr>
-            <td class="px-5 py-4 font-medium text-ink">Estimated cost</td>
-            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">~$91 output + ~$18 input (w/ caching)</td>
-            <td class="px-5 py-4 text-right font-bold tabular-nums text-ai">~$109 total</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="rounded-2xl bg-ai/5 border border-ai/30 p-6 sm:p-8 mt-8">
-      <h3 class="text-lg font-black text-ink mb-2">The key takeaway</h3>
-      <p class="text-base text-slate-700 leading-relaxed">
-        A <strong>single Claude&nbsp;Code agent</strong> running at a modest ~4.7% duty cycle — generating only
-        about one second in twenty over a ten-day window — comfortably produces this volume. No parallel fleet
-        of dozens of models is required to explain the line count. The sub-agent branches are about
-        <em>specialization and verification</em>, not raw generation throughput. And at roughly
-        <strong>$109</strong> in model spend, the economics are almost beside the point.
+      <p class="text-base text-slate-700 mt-6 leading-relaxed">
+        The "impossible" speed is real and also mundane: the agent treats compilation as an asynchronous concern
+        handled by a separate loop.
       </p>
     </div>
   </div>
 </section>
 
-<!-- ============ 9. OPEN QUESTIONS ============ -->
-<section id="questions" class="bg-surface">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-concern">Section 07</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Open Questions for Experts</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The commit history proves the work happened and how fast. It does not prove the result is
-      <em>good</em>. These four questions are where domain experts — in Rust, in systems security, in
-      software supply chain — should be looking. Expand each for the detail.
-    </p>
-
-    <div class="space-y-4">
-      <!-- Q1 -->
-      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
-          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
-          <span class="flex-1">
-            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 01</span>
-            <span class="block text-lg sm:text-xl font-black text-ink">Code Quality &amp; Correctness</span>
-          </span>
-        </summary>
-        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
-          <p>The PR reports a <strong>99.8% test pass rate</strong> on Linux x64/glibc. That headline is strong
-          — but the unexamined 0.2% is exactly where subtle correctness bugs hide, and a rewrite of this size
-          has a lot of surface area.</p>
-          <p>The deeper question is idiomatic quality: is this <em>real</em> Rust, or is it Zig mechanically
-          transliterated into Rust syntax? The two compile the same and behave very differently under
-          maintenance.</p>
-          <p>The commit messages themselves show extensive automated diff-review passes — entries like
-          "diff-review caught N bugs" recur throughout. That is encouraging, but it raises the obvious
-          question: <strong>who reviews the reviewer?</strong> And phase-b2 commits explicitly mention
-          "cache-hidden errors from T5" — errors that only surface later in the pipeline, after the commit
-          that introduced them is long buried.</p>
-        </div>
-      </details>
-
-      <!-- Q2 -->
-      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
-          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
-          <span class="flex-1">
-            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 02</span>
-            <span class="block text-lg sm:text-xl font-black text-ink">Memory Safety — The Unsafe Problem</span>
-          </span>
-        </summary>
-        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
-          <p>This is the sharpest concern. The entire point of rewriting in Rust is memory safety — yet the
-          phase-h commit messages reference <strong>"14,470 unsafe sites after r2"</strong> and
-          <strong>"15,084 unsafe sites before r1."</strong> The tree is saturated with <span
-          class="mono">unsafe</span> blocks.</p>
-          <p>The <span class="mono">claude/unsafe-5k</span> branch ran <strong>27 times</strong> to chip away at
-          them, but the net progress is hard to read from the outside. One representative commit —
-          <span class="mono">"phase-h: unsafe-wrap r4 — 672 sites / 23 strategies (&minus;477 unsafe)"</span> —
-          shows roughly <strong>470 sites removed per round</strong>.</p>
-          <p>At that rate, clearing 14,000+ remaining unsafe sites is <strong>dozens more passes</strong> of
-          work that had not happened when the PR merged. A Rust codebase this dense with <span
-          class="mono">unsafe</span> may be meaningfully <em>less</em> safe than a carefully hand-written Rust
-          codebase — and arguably no safer than the Zig it replaced, until that long tail is actually
-          retired.</p>
-        </div>
-      </details>
-
-      <!-- Q3 -->
-      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
-          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
-          <span class="flex-1">
-            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 03</span>
-            <span class="block text-lg sm:text-xl font-black text-ink">Performance Claims</span>
-          </span>
-        </summary>
-        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
-          <p>The PR claims benchmarks are "neutral or faster." But the <span
-          class="mono">claude/bench-until-green</span> branch ran <strong>19 rounds</strong> of optimization
-          before merge — and the name says the quiet part out loud.</p>
-          <p>That is textbook <strong>selection bias</strong>: run the benchmarks, tune the code until they
-          pass, then merge. It tells you the code <em>can</em> hit those numbers on those benchmarks — not that
-          it is robustly fast across workloads the benchmark suite does not cover.</p>
-          <p>To be fair: the <strong>binary-size reduction of 3&ndash;8&nbsp;MB is real</strong> and trivially
-          verifiable by anyone — that one is not in question. But AI-tuned micro-optimizations have a known
-          failure mode: they are brittle, tightly coupled to the exact benchmark shape, and prone to silent
-          regression as the surrounding code changes.</p>
-        </div>
-      </details>
-
-      <!-- Q4 -->
-      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
-          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
-          <span class="flex-1">
-            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 04</span>
-            <span class="block text-lg sm:text-xl font-black text-ink">Reproducibility &amp; Auditability</span>
-          </span>
-        </summary>
-        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
-          <p>One million lines merged into a production runtime with <strong>no human line-by-line code
-          review</strong> is, simply, unprecedented. There is no prior playbook for auditing a change this
-          large.</p>
-          <p>The history shows a <span class="mono">ci-errors-to-tasks</span> script: the agent auto-triages CI
-          failures into its own task queue. Efficient — but it also means a human may never have seen the
-          individual failures, only the aggregate green checkmark at the end.</p>
-          <p>Then there is <strong>supply-chain trust</strong>. If Claude&nbsp;Code carried a subtle bug in one
-          translation pattern, that bug would not appear once — it would appear <em>consistently across a
-          million lines</em>, everywhere the pattern was applied. Systematic errors are the hardest kind to
-          catch by sampling.</p>
-          <p>And the PR was merged by a <strong>single person</strong>, Jarred&nbsp;Sumner. At this scale, it
-          is a genuinely open question what the word "review" can even mean.</p>
-        </div>
-      </details>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 10. TECHNICAL APPENDIX ============ -->
+<!-- ============ APPENDIX ============ -->
 <section id="appendix" class="bg-white">
   <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Appendix</span>
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">Technical Appendix</h2>
-
-    <details class="group rounded-2xl border border-slate-200 bg-surface overflow-hidden">
-      <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-white transition">
-        <span class="chev text-ai font-black text-xl shrink-0">&rsaquo;</span>
-        <span class="text-lg font-black text-ink">Proofs, raw objects, and how to reproduce</span>
-      </summary>
-      <div class="px-5 sm:px-6 pb-8 pl-14 sm:pl-16 space-y-8 text-base text-slate-700 leading-relaxed">
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-2">The git object model — how same-second commits work</h3>
-          <p>A git commit is just an immutable object: a tree hash, parent hash(es), author line, committer
-          line, and a message. Creating one is a hash computation — no compilation, no test run, nothing that
-          touches the build system. There is nothing in git itself that prevents two commits from sharing a
-          one-second timestamp. When an agent generates code and calls <span class="mono">git commit</span>
-          back to back, sub-second and same-second gaps are the expected outcome, not an anomaly.</p>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-2">Author vs. committer timestamp proof</h3>
-          <p>Every git commit carries two timestamps: <em>author</em> (when the change was written) and
-          <em>committer</em> (when the commit object was created). A rebase, squash, or history rewrite
-          changes the committer timestamp while preserving the author timestamp — opening a measurable gap
-          between them. In PR&nbsp;#30412, <strong>6,699 of 6,755 commits</strong> have an author/committer
-          delta of under two seconds. That 99.2% is the fingerprint of history written live and never
-          rewritten. The 56 outliers are consistent with ordinary merge mechanics.</p>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-2">Parent-chain topology</h3>
-          <p>Of the 6,755 commits, <strong>6,479 are linear</strong> (exactly one parent) and
-          <strong>276 are merge commits</strong> (two or more parents). The merge commits are precisely the
-          points where the <span class="mono">claude/*</span> sub-agent branches fold their fixes back into the
-          main port branch — the structural evidence for the two-loop architecture described above.</p>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-2">Raw git object sample</h3>
-          <pre class="mono text-xs bg-ink text-slate-200 rounded-xl p-4 overflow-x-auto leading-relaxed"><span class="text-verified">$ git cat-file -p 6033d71077a2be04405e6c443bf9a30ccf34d293</span>
-tree    4b1c9e2a7f3d8061c5e4a9b2d7f0e3c6a8b1d4f7
-parent  89b9a180d90775788f8835efecbd63c27477b62f
-author    Jarred Sumner &lt;jarred@jarredsumner.com&gt; 1747085342 +0000
-committer Jarred Sumner &lt;jarred@jarredsumner.com&gt; 1747085342 +0000
-
-perf: ConcurrentTask intrusive Link — drop packed-ptr
-unpack on enqueue hot path (server)</pre>
-          <p class="text-sm text-slate-500 mt-2">A well-formed, ordinary commit object. Author and committer
-          epochs are identical (<span class="mono">1747085342</span>) — no rewrite.</p>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-2">How to reproduce this analysis</h3>
-          <ol class="list-decimal ml-5 space-y-1 text-sm">
-            <li>Blobless-clone the repo: <span class="mono">git clone --filter=blob:none https://github.com/oven-sh/bun</span></li>
-            <li>Check out the PR&nbsp;#30412 head and walk it with <span class="mono">git log</span> against the merge base.</li>
-            <li>Export every commit's SHA, author/committer identities, both timestamps, message, and parents.</li>
-            <li>Bucket inter-commit gaps; compare author vs. committer deltas; tag commits by phase from the message prefix.</li>
-            <li>Extract raw timezone offsets with <span class="mono">git cat-file -p &lt;sha&gt;</span> and grep the author line.</li>
-            <li>The full extraction and analysis scripts — <span class="mono">git_forensics.py</span> and
-            <span class="mono">analyze_bun_pr.py</span> — ship in this repository alongside this page, together
-            with the raw <span class="mono">all_commits_git.tsv</span> dataset.</li>
-          </ol>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-3">Batch forensics — three sampled commit bursts</h3>
-          <p class="text-sm text-slate-600 mb-5">Raw git objects were inspected for three representative bursts using <span class="mono">git cat-file -p</span> and <span class="mono">git diff-tree --numstat -r</span>. Every countable claim was verified against the object store.</p>
-
-          <div class="space-y-4">
-            <div class="rounded-xl border border-slate-200 bg-surface p-5">
-              <div class="flex items-start gap-3 mb-3">
-                <span class="mono text-xs font-bold text-caution bg-caution/10 rounded px-2 py-1 shrink-0">BATCH A</span>
-                <div>
-                  <div class="font-bold text-ink text-sm">15-commit perf burst · ts: 1778548419 · 2026-05-12 01:13:39Z</div>
-                  <div class="text-xs text-slate-500 mt-0.5">All 15 share the exact same Unix second. All tz: +0000. Author == committer on all 15.</div>
-                </div>
-              </div>
-              <p class="text-sm text-slate-700 leading-relaxed">The 15-for-15 identical second, combined with uniform <span class="mono">+0000</span> and author&nbsp;==&nbsp;committer on every commit, is the signature of <strong>GIT_AUTHOR_DATE / GIT_COMMITTER_DATE pinning</strong> — standard practice in automated workflows. The parent chain is fully linear and cryptographically sealed (each commit's SHA encodes its parent's SHA). The diffs themselves are real and semantically coherent: a perf sweep across 15 distinct subsystems (<span class="mono">bun_core</span>, <span class="mono">wyhash</span>, <span class="mono">base64</span>, <span class="mono">json_lexer</span>, etc.), with one targeted optimization per subsystem, including a one-liner <span class="mono">#[inline]</span>&nbsp;→&nbsp;<span class="mono">#[inline(always)]</span> micro-opt on a lexer hot loop. <strong>Verdict: timestamp pinning (benign). Diffs: real and plausible.</strong></p>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-surface p-5">
-              <div class="flex items-start gap-3 mb-3">
-                <span class="mono text-xs font-bold text-verified bg-verified/10 rounded px-2 py-1 shrink-0">BATCH B</span>
-                <div>
-                  <div class="font-bold text-ink text-sm">14-commit divergence sweep · ts: 1778633684–685 · 2026-05-13 00:54:44–45Z</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Sweep crosses a second boundary mid-run. Mild evidence against hard pinning — consistent with a genuine fast loop.</div>
-                </div>
-              </div>
-              <p class="text-sm text-slate-700 leading-relaxed">The sweep is larger than it first appears: 14 commits spanning two seconds (<span class="mono">...684</span> and <span class="mono">...685</span>). Crossing a second boundary mid-batch is evidence <em>against</em> date-pinning and <em>for</em> a real loop running at machine speed. The diffs are semantically reasoned, not templated: the <span class="mono">install/lockfile</span> commit carries <span class="mono">// PORT NOTE:</span> comments explaining Zig vs. Rust drop order, borrow lifetimes, and byte-exact UTF-8 semantics — the reasoning of an agent (or human) that understood what it was translating. Subsystem labels ("fix 6 http client sites" → 6 files under <span class="mono">src/http/</span>) are accurate to the file count. <strong>Verdict: likely a genuine live loop, not a replay. Content reflects real semantic reasoning.</strong></p>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-surface p-5">
-              <div class="flex items-start gap-3 mb-3">
-                <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">BATCH C</span>
-                <div>
-                  <div class="font-bold text-ink text-sm">phase-b0 engineering plan · 2026-05-05 00:00–04:14Z</div>
-                  <div class="text-xs text-slate-500 mt-0.5">Interleaved docs: commits filled the apparent "31-minute gap" — the chain is dense and contiguous.</div>
-                </div>
-              </div>
-              <p class="text-sm text-slate-700 leading-relaxed">The apparent 31-minute gap in the <span class="mono">phase-b0</span> commits is exculpatory: it is filled by <span class="mono">docs: add Dispatch section</span> at 00:30:07 — the agent spent that half hour writing a design document before doing the DELETE pass. All 36-crate and 96-crate claims check out exactly against the diff. The phase-b1 timing (irregular gaps proportional to crate complexity, 34s–231s) is consistent with a genuine compile/fix loop. <strong>Verdict: engineering plan is expert-grade; phase-b1 timing reads as organic compile cadence.</strong></p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <h3 class="text-base font-black text-ink mb-3">What git objects can and cannot prove</h3>
-          <div class="grid sm:grid-cols-2 gap-5">
-            <div>
-              <div class="text-xs font-bold uppercase tracking-wide text-verified mb-3">CAN be proven</div>
-              <ul class="space-y-2 text-sm text-slate-700">
-                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Strict creation order of every commit (SHA-1 parent-preimage — cryptographically enforced, cannot be circumvented)</li>
-                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> All batches are real, distinct tree snapshots — no empty commits, no duplicate-tree pointers</li>
-                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Claimed file and crate counts are accurate where countable ("36 crates" = 36 dirs, "96 crates" = 96 manifests — exact)</li>
-                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> No post-hoc rebasing — author == committer timestamps everywhere in the sampled batches</li>
-                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Diffs are coherent and semantically reasoned, not templated transforms</li>
-              </ul>
-            </div>
-            <div>
-              <div class="text-xs font-bold uppercase tracking-wide text-concern mb-3">CANNOT be proven</div>
-              <ul class="space-y-2 text-sm text-slate-700">
-                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether the code was AI-generated or human-written — the object store records results, never authorship process</li>
-                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether diffs were generated live or pre-staged and replayed (byte-identical object graphs either way)</li>
-                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Actual wall-clock elapsed time — timestamps are author-controlled metadata</li>
-                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether GIT_AUTHOR_DATE was explicitly set — git does not record how a date was provided</li>
-                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Who designed the migration plan — the plan is expert-grade, but git cannot say if it came from an AI, a human, or a prior design document</li>
-              </ul>
-            </div>
-          </div>
-          <p class="text-sm text-slate-500 mt-5 pt-5 border-t border-slate-200">
-            Definitive proof of "autonomous AI authorship" would require out-of-band evidence: the agent's session transcript, CI build logs with independent timestamps, the harness execution records. Git is a content-addressed <em>result</em> store — it was never designed to prove <em>process</em>.
-          </p>
-        </div>
-
-      </div>
-    </details>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-6">Technical Appendix</h2>
+    <h3 class="text-base font-black text-ink mb-3">How to reproduce this analysis</h3>
+    <ol class="list-decimal ml-5 space-y-2 text-sm text-slate-700">
+      <li>Blobless-clone the repo:
+        <span class="mono">git clone --filter=blob:none https://github.com/oven-sh/bun</span></li>
+      <li>Check out the PR&nbsp;#30412 head and walk it with <span class="mono">git log</span> against the merge base.</li>
+      <li>Export every commit's SHA, author/committer identities, both timestamps, message, and parents.</li>
+      <li>Bucket inter-commit gaps; compare author vs. committer deltas; tag commits by phase from the message prefix.</li>
+      <li>Extract raw timezone offsets with <span class="mono">git cat-file -p &lt;sha&gt;</span> and grep the author line.</li>
+      <li>The full extraction and analysis scripts &mdash; <span class="mono">git_forensics.py</span> and
+      <span class="mono">analyze_bun_pr.py</span> &mdash; ship in this repository alongside this page, together with
+      the raw <span class="mono">all_commits_git.tsv</span> dataset.</li>
+    </ol>
   </div>
 </section>
 
-<!-- ============ 11. FOOTER ============ -->
+<!-- ============ FOOTER ============ -->
 <footer class="bg-ink">
   <div class="max-w-4xl mx-auto px-5 py-12 text-center">
     <div class="flex items-center justify-center gap-2 mb-3">
-      <span class="inline-block w-2.5 h-2.5 rounded-full bg-ai"></span>
-      <span class="text-white font-bold tracking-tight">PR&nbsp;#30412 Forensic Analysis</span>
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-rust"></span>
+      <span class="text-white font-bold tracking-tight">Anthropic RUSTed the BUN</span>
     </div>
     <p class="text-sm text-white/50 max-w-xl mx-auto leading-relaxed">
       Analysis based entirely on public GitHub data. All extraction and analysis scripts are available in this
-      repository — every figure on this page can be independently re-checked.
+      repository &mdash; every figure on this page can be independently re-checked.
     </p>
     <p class="text-sm text-white/40 mt-4">
       <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
@@ -1080,7 +748,24 @@ unpack on enqueue hot path (server)</pre>
 (function () {
   'use strict';
 
-  // Shared palette
+  // ============ Heatmap data (verbatim) ============
+  var HEAT = {
+    "May 04": {"12:00":1,"13:40":1,"14:05":1,"14:15":1,"14:25":1,"14:35":1,"14:40":1,"14:50":1,"15:40":1,"15:45":1,"16:00":1,"18:25":1,"19:00":1,"19:30":1,"19:50":1,"20:25":1,"20:45":1,"22:05":1,"22:15":1,"22:35":1},
+    "May 05": {"00:00":1,"00:30":2,"00:35":1,"00:40":1,"01:00":1,"01:10":1,"01:15":1,"01:25":1,"01:35":1,"04:05":1,"04:10":2,"04:15":3,"04:20":2,"04:25":3,"04:30":2,"06:25":1,"06:30":1,"06:35":2,"06:40":2,"07:25":1,"07:30":2,"07:40":1,"07:45":3,"07:50":1,"07:55":1,"08:00":1,"08:05":1,"08:15":1,"08:25":1,"08:30":1,"08:35":1,"08:40":1,"09:00":2,"09:15":1,"09:45":1,"10:05":1,"10:15":1,"10:40":1,"10:55":1,"11:15":1,"12:15":1,"12:30":1,"15:45":2,"16:00":1,"16:05":1,"18:30":1,"18:55":1,"19:25":1,"19:35":1,"19:45":2,"20:25":1,"21:00":1,"21:30":3,"22:05":1,"22:15":1,"23:45":1},
+    "May 06": {"00:10":2,"01:20":1,"01:45":1,"01:55":2,"02:00":2,"02:05":1,"03:10":1,"03:20":1,"03:35":1,"03:40":1,"04:00":1,"04:15":1,"04:20":1,"04:25":2,"04:30":6,"04:35":5,"04:40":6,"04:45":10,"04:50":5,"04:55":6,"05:00":9,"05:05":13,"05:10":13,"05:15":10,"05:20":10,"05:25":15,"05:30":8,"05:35":11,"05:40":16,"05:45":10,"05:50":10,"05:55":14,"06:00":14,"06:05":11,"06:10":11,"06:15":14,"06:20":10,"06:25":9,"06:30":6,"06:35":13,"06:40":7,"06:45":17,"06:50":8,"06:55":21,"07:00":6,"07:05":3,"07:10":8,"07:15":12,"07:20":3,"07:25":2,"07:30":2,"07:40":7,"07:45":3,"07:50":5,"07:55":9,"08:00":5,"08:05":15,"08:10":15,"08:15":11,"08:20":11,"08:25":34,"08:30":135,"08:35":47,"08:40":10,"08:45":1,"08:50":4,"08:55":8,"09:00":5,"09:05":3,"09:10":11,"09:15":40,"09:20":88,"09:25":24,"09:30":6,"09:35":34,"09:40":18,"09:45":24,"09:50":22,"09:55":31,"10:00":16,"10:05":13,"10:10":10,"10:15":26,"10:20":25,"10:25":27,"10:30":15,"10:35":17,"10:40":18,"10:45":12,"10:50":6,"10:55":11,"11:00":5,"11:05":1,"11:10":11,"11:15":9,"11:20":11,"11:25":14,"11:30":8,"11:35":3,"11:40":5,"11:45":2,"11:50":6,"11:55":11,"12:00":5,"12:05":1,"12:10":4,"12:15":1,"12:20":1,"12:25":1,"12:30":1,"12:35":1,"12:45":1,"15:50":3,"15:55":2,"16:00":6,"16:05":12,"16:10":19,"16:15":14,"16:20":11,"16:25":6,"16:30":149,"16:35":4,"16:40":91,"16:45":113,"16:50":26,"16:55":7,"17:00":31,"17:05":142,"17:10":177,"17:15":66,"17:20":21,"17:25":94,"17:30":25,"17:35":50,"17:40":21,"17:45":28,"17:50":18,"17:55":22,"18:00":7,"18:05":5,"18:10":57,"18:15":18,"18:20":2,"18:25":1,"18:30":1,"18:35":1,"18:45":3,"18:50":2,"18:55":5,"19:05":3,"19:10":5,"19:15":1,"19:20":1,"19:25":3,"19:35":3,"19:40":1,"19:45":2,"20:00":1,"20:15":1,"20:30":1,"22:40":1,"22:45":27,"22:50":12,"22:55":24,"23:00":24,"23:05":15,"23:10":17,"23:15":16,"23:20":26,"23:25":18,"23:30":5,"23:35":44,"23:40":15,"23:45":15,"23:50":42,"23:55":27},
+    "May 07": {"00:00":21,"00:05":19,"00:10":33,"00:15":20,"00:20":22,"00:25":21,"00:30":24,"00:35":19,"00:40":15,"00:45":17,"00:50":31,"00:55":25,"01:00":41,"01:05":20,"01:10":22,"01:15":29,"01:20":31,"01:25":17,"01:30":9,"01:35":8,"01:40":10,"01:45":14,"01:50":34,"01:55":46,"02:00":25,"02:05":17,"02:10":18,"02:15":23,"02:20":19,"02:25":21,"02:30":12,"02:35":16,"02:40":33,"02:45":22,"02:50":19,"02:55":33,"03:00":28,"03:05":17,"03:10":32,"03:15":26,"03:20":35,"03:25":30,"03:30":41,"03:35":49,"03:40":34,"03:45":11,"03:50":16,"03:55":8,"04:00":9,"04:05":26,"04:10":16,"04:15":9,"04:20":6,"04:25":2,"04:35":1,"04:40":1,"04:50":4,"05:00":1,"05:05":1,"05:15":1,"05:25":3,"05:30":1,"05:35":3,"05:45":4,"05:50":1,"05:55":2,"06:00":1,"06:05":3,"06:10":2,"06:20":2,"06:25":2,"06:40":1,"07:00":2,"07:05":5,"07:10":7,"07:15":4,"07:20":3,"07:25":3,"07:30":1,"07:35":1,"07:55":1,"08:00":3,"08:05":7,"08:10":3,"08:15":3,"08:20":2,"08:25":5,"08:35":6,"08:40":6,"08:50":3,"08:55":2,"09:05":1,"09:15":3,"09:20":6,"09:25":4,"09:30":3,"09:35":5,"09:40":2,"09:45":1,"10:00":1,"10:05":2,"10:10":2,"10:15":10,"10:20":3,"10:25":3,"10:30":8,"10:40":5,"10:45":5,"10:50":9,"10:55":7,"11:00":1,"11:05":4,"11:10":14,"11:15":6,"11:20":2,"11:25":3,"11:30":1,"11:35":1,"11:40":2,"11:55":1,"12:05":2,"12:10":1,"12:20":1,"12:25":2,"12:35":1,"12:45":1,"12:55":1,"13:00":1,"13:05":1,"13:15":1,"13:25":1,"13:30":1,"13:35":1,"14:05":1,"14:15":2,"14:20":1,"14:35":1,"20:45":1,"20:55":4,"21:05":2,"21:10":1,"21:15":2,"21:20":1,"21:25":2,"21:45":1,"21:50":1,"22:05":1,"22:30":1,"22:40":12,"22:45":14,"22:50":13,"22:55":12,"23:00":8,"23:05":4,"23:10":3,"23:20":2,"23:25":1,"23:30":10,"23:35":16,"23:40":8,"23:45":5,"23:50":5,"23:55":1},
+    "May 08": {"00:00":15,"00:05":35,"00:10":14,"00:15":8,"00:20":1,"00:30":2,"00:35":5,"00:40":28,"00:45":24,"00:50":14,"00:55":13,"01:00":4,"01:05":7,"01:10":8,"01:15":4,"01:30":4,"01:35":4,"01:40":2,"01:45":4,"01:50":7,"01:55":3,"02:00":5,"02:05":2,"02:10":3,"02:15":3,"02:20":3,"02:25":5,"02:30":8,"02:40":1,"02:45":4,"02:50":8,"02:55":7,"03:00":7,"03:05":7,"03:10":3,"03:15":6,"03:20":3,"03:25":8,"03:30":5,"03:35":2,"03:40":11,"03:45":4,"03:55":5,"04:00":5,"04:05":2,"04:10":5,"04:15":2,"04:20":3,"04:25":1,"04:35":1,"04:45":3,"04:50":5,"04:55":1,"05:00":1,"05:05":5,"05:15":3,"05:20":1,"05:25":2,"05:30":4,"05:35":6,"05:40":2,"05:50":3,"05:55":6,"06:00":6,"06:05":3,"06:10":3,"06:15":3,"06:20":3,"06:25":5,"06:30":5,"06:40":3,"06:45":7,"06:50":1,"06:55":2,"07:00":5,"07:05":2,"07:10":1,"07:15":3,"07:20":3,"07:25":2,"07:30":2,"07:35":3,"07:40":3,"07:45":2,"07:50":2,"07:55":1,"08:05":1,"08:10":1,"08:15":1,"08:25":1,"08:30":1,"08:35":1,"08:40":4,"08:45":1,"08:50":3,"09:00":2,"09:05":1,"09:10":1,"09:15":1,"09:20":1,"09:30":2,"09:35":2,"09:40":1,"09:55":1,"10:30":1,"10:35":2,"10:40":3,"10:50":3,"10:55":4,"11:00":1,"11:15":1,"11:40":1,"12:15":1,"12:20":2,"12:25":2,"12:30":2,"12:35":2,"12:40":4,"12:50":2,"12:55":2,"13:00":1,"13:10":1,"13:15":3,"13:20":5,"13:25":1,"13:30":3,"13:35":2,"13:40":1,"13:45":1,"14:20":3,"14:25":3,"14:30":1,"14:35":3,"14:40":1,"14:45":2,"14:50":3,"15:00":2,"15:05":1,"15:10":1,"15:15":1,"15:20":2,"15:25":3,"15:30":3,"15:35":4,"15:40":5,"15:45":16,"15:50":16,"15:55":10,"16:00":6,"16:05":6,"16:10":3,"16:15":3,"16:20":4,"16:25":3,"16:30":3,"16:35":4,"16:40":4,"16:45":5,"16:50":2,"16:55":6,"17:00":2,"17:25":1,"18:00":1,"18:30":1,"19:55":1,"20:00":1,"20:15":1,"20:20":3,"20:25":1,"20:30":2,"20:35":4,"20:55":2,"21:00":3,"21:05":3,"21:10":4,"21:20":5,"21:25":3,"21:30":2,"21:40":3,"21:45":1,"21:50":3,"22:00":2,"22:05":4,"22:10":5,"22:15":4,"22:20":6,"22:25":3,"22:30":1,"22:35":2,"22:40":1,"22:45":1,"22:55":4,"23:00":2,"23:05":3,"23:10":1,"23:15":2,"23:20":1,"23:25":6,"23:30":1,"23:35":1},
+    "May 09": {"00:05":1,"02:00":3,"02:05":1,"02:10":1,"02:15":1,"02:20":2,"02:25":1,"02:30":3,"02:35":3,"03:00":1,"03:15":1,"03:25":1,"03:35":1,"03:40":3,"03:45":3,"03:50":1,"03:55":2,"04:40":1,"04:45":1,"04:55":1,"05:00":1,"05:50":2,"05:55":1,"06:15":1,"06:20":2,"06:25":1,"06:45":1,"06:50":2,"06:55":1,"07:00":2,"07:05":2,"07:20":1,"07:25":2,"07:35":1,"07:40":3,"07:45":1,"07:55":1,"08:20":5,"08:25":1,"08:30":1,"08:35":1,"08:40":2,"08:45":1,"08:55":2,"09:00":1,"09:05":1,"09:15":1,"09:20":2,"09:40":2,"09:50":1,"09:55":4,"10:05":1,"10:15":16,"10:20":28,"10:25":13,"10:30":2,"10:55":4,"11:00":3,"11:35":2,"11:45":2,"11:50":3,"11:55":2,"12:00":3,"12:05":2,"12:15":1,"12:20":1,"12:30":1,"13:10":1,"13:40":1,"13:45":1,"13:55":1,"14:05":4,"14:15":2,"14:20":1,"14:25":2,"14:30":2,"14:45":1,"14:50":1,"14:55":3,"15:00":2,"15:05":1,"15:10":1,"15:20":2,"15:25":1,"15:35":1,"15:40":1,"16:05":1,"16:10":6,"16:15":2,"16:20":10,"16:25":4,"16:30":4,"16:50":2,"17:15":1,"17:25":1,"18:00":1,"18:20":1,"18:30":1,"18:50":1,"18:55":1,"19:40":1,"19:45":1,"19:50":2,"19:55":2,"20:25":1,"20:30":4,"20:35":1,"20:40":1,"20:45":1,"20:50":1,"21:15":2,"21:20":2},
+    "May 10": {"07:20":1,"07:35":1,"07:40":1,"07:50":1,"08:10":1,"08:25":1,"09:30":1,"10:30":1,"10:35":1,"11:20":1,"12:55":1,"13:15":1,"13:40":1,"14:30":1,"15:05":2,"15:10":1,"15:25":1,"16:00":1,"16:10":1,"16:40":1,"17:05":1,"17:15":1,"18:30":1,"18:45":1,"19:10":2,"20:10":1,"21:05":1,"21:35":1,"21:45":1,"21:50":1,"21:55":1,"22:00":1,"22:05":1,"22:15":1,"22:30":1,"22:55":1,"23:00":1,"23:55":2},
+    "May 11": {"00:05":1,"00:20":1,"00:40":1,"01:35":1,"01:55":1,"02:25":1,"03:10":1,"04:15":1,"04:30":1,"04:40":1,"04:55":1,"05:10":1,"06:00":2,"06:10":1,"06:45":1,"06:55":1,"07:25":1,"08:10":1,"08:20":1,"08:30":1,"08:50":1,"09:20":1,"09:25":1,"10:10":1,"10:45":1,"10:50":1,"11:10":1,"11:15":3,"11:35":2,"13:10":1,"13:20":1,"14:00":4,"14:05":1,"14:25":1,"14:45":1,"15:05":1,"15:25":1,"15:45":5,"15:50":3,"16:00":1,"16:10":2,"16:20":2,"16:30":1,"16:45":4,"16:50":5,"16:55":1,"17:00":2,"17:05":2,"17:10":2,"17:15":3,"17:20":3,"17:25":1,"17:35":1,"17:40":4,"18:15":2,"18:25":1,"18:30":2,"18:35":2,"18:40":2,"19:40":1,"20:00":4,"20:10":1,"20:20":2,"20:25":2,"20:35":2,"21:05":11,"21:10":8,"21:15":17,"21:20":29,"21:25":20,"21:30":27,"21:35":21,"21:40":12,"21:45":7,"21:50":5,"22:20":4,"22:55":13,"23:35":3},
+    "May 12": {"00:00":13,"00:20":2,"00:25":3,"00:30":13,"00:40":1,"00:50":13,"01:05":12,"01:10":21,"01:30":12,"01:55":12,"02:05":9,"02:20":10,"02:40":23,"02:45":1,"02:55":12,"03:10":1,"03:15":13,"03:25":8,"03:30":1,"03:35":1,"03:40":11,"04:05":14,"04:10":11,"04:15":1,"04:25":11,"04:40":4,"04:50":7,"05:15":9,"05:25":19,"05:30":8,"05:45":3,"05:50":2,"05:55":6,"06:00":2,"06:05":10,"06:10":2,"06:20":10,"06:25":1,"06:30":1,"06:35":7,"06:40":11,"06:45":3,"06:50":5,"06:55":4,"07:00":1,"07:05":9,"07:10":1,"07:15":1,"07:30":11,"07:40":2,"07:45":1,"07:50":10,"08:05":4,"08:10":7,"08:20":1,"08:25":4,"08:40":1,"08:45":8,"08:50":3,"09:00":1,"09:05":6,"09:15":3,"09:25":5,"09:45":17,"09:50":5,"09:55":7,"10:05":4,"10:15":8,"10:20":1,"10:25":1,"10:35":11,"10:50":7,"10:55":11,"11:00":1,"11:05":6,"11:15":1,"11:25":8,"11:35":3,"11:40":7,"11:50":4,"12:00":7,"12:20":9,"12:35":3,"12:40":1,"12:55":4,"13:15":1,"14:15":2,"15:15":1,"15:20":1,"15:45":2,"16:15":1,"16:50":1,"17:15":1,"17:30":1,"17:35":1,"17:40":1,"17:45":1,"18:15":1,"18:50":1,"19:20":1,"20:00":1,"20:10":13,"20:20":1,"20:25":2,"20:30":4,"20:45":9,"20:50":3,"21:05":11,"21:20":1,"21:25":19,"21:35":6,"21:40":7,"22:20":1,"22:25":3,"23:05":1,"23:10":2,"23:20":2,"23:30":23,"23:50":1},
+    "May 13": {"00:35":1,"00:45":2,"00:50":18,"01:30":1,"01:35":1,"02:30":2,"04:50":7,"05:10":2,"05:15":1,"05:25":2,"06:10":2,"06:25":6,"07:10":1,"07:55":1,"08:20":13,"08:45":1,"08:55":1,"09:00":2,"09:25":1,"09:50":11,"11:00":2,"11:45":10,"12:20":2,"13:15":11,"13:25":2,"14:10":2,"14:40":12,"15:55":14,"16:45":7,"17:30":9,"17:35":1,"17:40":1,"18:15":2,"18:20":1,"18:25":1,"18:35":4,"18:40":1,"18:45":1,"19:20":2,"19:35":9,"19:50":1,"20:20":1,"21:20":1,"21:50":2,"21:55":1},
+    "May 14": {"00:10":3,"00:15":1,"00:20":1,"00:25":3,"01:15":1,"05:40":1,"06:10":1}
+  };
+  var HEAT_MAX = 177;
+  var DAY_TOTALS = {"May 04":20,"May 05":74,"May 06":2906,"May 07":1568,"May 08":724,"May 09":269,"May 10":47,"May 11":285,"May 12":675,"May 13":171,"May 14":16};
+
+  // ============ Shared chart palette ============
   var COLOR = {
     ai: '#7C3AED',
     aiDark: '#4C1D95',
@@ -1092,8 +777,6 @@ unpack on enqueue hot path (server)</pre>
     tick: 'rgba(15, 23, 42, 0.55)',
   };
 
-  // Build a vertical purple gradient for the bar fill.
-  // Falls back to a flat color if the 2D context is unavailable.
   function purpleGradient(ctx, area) {
     if (!ctx || !area) return COLOR.ai;
     var g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
@@ -1111,14 +794,14 @@ unpack on enqueue hot path (server)</pre>
     displayColors: false,
   };
 
-  // ---- Chart 1: Commits per day ----
+  // ============ Chart: Commits per day ============
   var dayCanvas = document.getElementById('chartCommitsPerDay');
   if (dayCanvas) {
     var dayLabels = ['May 04', 'May 05', 'May 06', 'May 07', 'May 08',
                      'May 09', 'May 10', 'May 11', 'May 12', 'May 13', 'May 14'];
     var dayValues = [20, 74, 2906, 1568, 724, 269, 47, 285, 675, 171, 16];
     var annotations = {
-      'May 06': 'Peak: 2,906 commits — Phase D/E bulk porting',
+      'May 06': 'Peak: 2,906 commits — Phase E bulk porting',
       'May 10': 'Gap — compile / test cycle',
     };
     new Chart(dayCanvas.getContext('2d'), {
@@ -1144,9 +827,7 @@ unpack on enqueue hot path (server)</pre>
           legend: { display: false },
           tooltip: Object.assign({}, baseTooltip, {
             callbacks: {
-              label: function (item) {
-                return item.formattedValue + ' commits';
-              },
+              label: function (item) { return item.formattedValue + ' commits'; },
               afterLabel: function (item) {
                 var note = annotations[item.label];
                 return note ? '→ ' + note : '';
@@ -1166,7 +847,7 @@ unpack on enqueue hot path (server)</pre>
     });
   }
 
-  // ---- Chart 2: Commits by phase (horizontal bar) ----
+  // ============ Chart: Commits by phase ============
   var phaseCanvas = document.getElementById('chartPhases');
   if (phaseCanvas) {
     var phaseRows = [
@@ -1202,9 +883,7 @@ unpack on enqueue hot path (server)</pre>
           legend: { display: false },
           tooltip: Object.assign({}, baseTooltip, {
             callbacks: {
-              label: function (item) {
-                return item.formattedValue + ' commits';
-              },
+              label: function (item) { return item.formattedValue + ' commits'; },
             },
           }),
         },
@@ -1223,59 +902,91 @@ unpack on enqueue hot path (server)</pre>
     });
   }
 
-  // ---- Chart 3: Inter-commit gap distribution (horizontal bar, color-coded) ----
-  var gapCanvas = document.getElementById('chartGaps');
-  if (gapCanvas) {
-    var gapRows = [
-      { label: '0s (sub-second)', value: 581,  tone: COLOR.verified },
-      { label: '1–5s',            value: 2204, tone: COLOR.verified },
-      { label: '6–30s',           value: 2208, tone: COLOR.caution },
-      { label: '31–120s',         value: 928,  tone: COLOR.caution },
-      { label: '2–10 min',        value: 540,  tone: COLOR.concern },
-      { label: '>10 min',         value: 293,  tone: COLOR.concern },
-    ];
-    new Chart(gapCanvas.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: gapRows.map(function (r) { return r.label; }),
-        datasets: [{
-          label: 'Commits',
-          data: gapRows.map(function (r) { return r.value; }),
-          backgroundColor: gapRows.map(function (r) { return r.tone; }),
-          hoverBackgroundColor: gapRows.map(function (r) { return r.tone; }),
-          borderRadius: 5,
-          borderSkipped: false,
-        }],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: Object.assign({}, baseTooltip, {
-            callbacks: {
-              label: function (item) {
-                var total = gapRows.reduce(function (s, r) { return s + r.value; }, 0);
-                var pct = ((item.parsed.x / total) * 100).toFixed(1);
-                return item.formattedValue + ' commits  (' + pct + '%)';
-              },
-            },
-          }),
-        },
-        scales: {
-          x: {
-            beginAtZero: true,
-            grid: { color: COLOR.grid },
-            ticks: { color: COLOR.tick, font: { size: 11 } },
-          },
-          y: {
-            grid: { display: false },
-            ticks: { color: COLOR.tick, font: { size: 11 } },
-          },
-        },
-      },
+  // ============ Heatmap rendering ============
+  var DAY_ORDER = ['May 04','May 05','May 06','May 07','May 08','May 09','May 10','May 11','May 12','May 13','May 14'];
+
+  function intensityToColor(n) {
+    if (!n || n <= 0) return 'rgba(124,58,237,0)';
+    if (n <= 2)       return 'rgba(124,58,237,0.15)';
+    if (n <= 10)      return 'rgba(124,58,237,0.4)';
+    if (n <= 30)      return 'rgba(124,58,237,0.7)';
+    return 'rgba(124,58,237,1.0)';
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  var tabsEl = document.getElementById('heat-tabs');
+  var gridEl = document.getElementById('heat-grid');
+  var tooltipEl = document.getElementById('heat-tooltip');
+
+  if (tabsEl && gridEl && tooltipEl) {
+    var activeDay = 'May 06'; // default to peak
+
+    DAY_ORDER.forEach(function (day) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'heat-tab' + (day === activeDay ? ' active' : '');
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('data-day', day);
+      btn.innerHTML =
+        '<span class="heat-tab-day">' + day + '</span>' +
+        '<span class="heat-tab-count">' + (DAY_TOTALS[day] || 0).toLocaleString() + '</span>';
+      btn.addEventListener('click', function () {
+        activeDay = day;
+        Array.prototype.forEach.call(tabsEl.querySelectorAll('.heat-tab'), function (el) {
+          el.classList.toggle('active', el.getAttribute('data-day') === day);
+        });
+        renderGrid(activeDay);
+      });
+      tabsEl.appendChild(btn);
     });
+
+    function renderGrid(day) {
+      var data = HEAT[day] || {};
+      var html = '';
+      // Header row
+      html += '<thead><tr><th></th>';
+      for (var m = 0; m < 60; m += 5) {
+        html += '<th>:' + pad2(m) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+      // Body rows
+      for (var h = 0; h < 24; h++) {
+        html += '<tr><td class="row-label">' + pad2(h) + '</td>';
+        for (var m2 = 0; m2 < 60; m2 += 5) {
+          var key = pad2(h) + ':' + pad2(m2);
+          var n = data[key] || 0;
+          var bg = intensityToColor(n);
+          html += '<td class="heat-cell" style="background:' + bg + '" data-key="' + key + '" data-count="' + n + '"></td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody>';
+      gridEl.innerHTML = html;
+    }
+
+    // Tooltip handlers — delegated
+    gridEl.addEventListener('mouseover', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('heat-cell')) return;
+      var key = t.getAttribute('data-key');
+      var count = t.getAttribute('data-count');
+      tooltipEl.textContent = key + '  —  ' + (count === '0' ? 'no commits' : count + ' commits');
+      tooltipEl.classList.add('show');
+    });
+    gridEl.addEventListener('mousemove', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('heat-cell')) return;
+      tooltipEl.style.left = e.clientX + 'px';
+      tooltipEl.style.top = e.clientY + 'px';
+    });
+    gridEl.addEventListener('mouseout', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('heat-cell')) return;
+      tooltipEl.classList.remove('show');
+    });
+
+    renderGrid(activeDay);
   }
 })();
 </script>
