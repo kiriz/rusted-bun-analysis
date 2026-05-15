@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Claude Code Rewrote 1 Million Lines of Bun — A Forensic Analysis of PR #30412</title>
+<meta name="description" content="A forensic analysis of oven-sh/bun PR #30412: 6,755 commits, 1,009,257 lines, 10 days, one AI agent. The commits are real. Here is how it actually happened." />
+<meta property="og:title" content="How Claude Code Rewrote 1 Million Lines of Bun" />
+<meta property="og:description" content="A forensic analysis of PR #30412 — 6,755 commits, 10 days, one AI agent." />
+<meta property="og:type" content="article" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        colors: {
+          ai: '#7C3AED',
+          verified: '#10B981',
+          caution: '#F59E0B',
+          concern: '#EF4444',
+          ink: '#0F172A',
+          surface: '#F8FAFC',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { -webkit-font-smoothing: antialiased; }
+  .chart-box { position: relative; width: 100%; }
+  .mono { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+  /* Anchor offset so sticky nav doesn't cover headings */
+  section[id] { scroll-margin-top: 88px; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+  .chev { transition: transform 0.2s ease; }
+  .grad-purple { background: linear-gradient(135deg, #7C3AED 0%, #4C1D95 100%); }
+  .pill-shadow { box-shadow: 0 8px 30px rgba(124, 58, 237, 0.25); }
+  ::selection { background: #7C3AED; color: #fff; }
+</style>
+</head>
+<body class="font-sans bg-surface text-ink antialiased">
+
+<!-- ============ STICKY NAV ============ -->
+<nav class="sticky top-0 z-50 bg-ink/95 backdrop-blur border-b border-white/10">
+  <div class="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
+    <a href="#hero" class="text-white font-bold tracking-tight text-sm sm:text-base flex items-center gap-2">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-ai"></span>
+      PR&nbsp;#30412&nbsp;<span class="text-white/40 font-normal hidden sm:inline">forensic analysis</span>
+    </a>
+    <div class="hidden md:flex items-center gap-5 text-xs font-medium text-white/60">
+      <a href="#tldr" class="hover:text-white transition">TL;DR</a>
+      <a href="#timeline" class="hover:text-white transition">Timeline</a>
+      <a href="#architecture" class="hover:text-white transition">Agent Architecture</a>
+      <a href="#paradox" class="hover:text-white transition">Speed Paradox</a>
+      <a href="#tokens" class="hover:text-white transition">Token Math</a>
+      <a href="#questions" class="hover:text-white transition">Open Questions</a>
+    </div>
+    <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
+       class="text-xs font-semibold bg-ai hover:bg-ai/80 transition text-white px-3 py-1.5 rounded-md">
+      View PR&nbsp;&rarr;
+    </a>
+  </div>
+</nav>
+
+<!-- ============ 1. HERO ============ -->
+<header id="hero" class="bg-ink relative overflow-hidden">
+  <div class="absolute inset-0 opacity-30"
+       style="background-image: radial-gradient(circle at 20% 20%, #7C3AED55 0%, transparent 45%), radial-gradient(circle at 85% 70%, #4C1D9566 0%, transparent 50%);"></div>
+  <div class="relative max-w-5xl mx-auto px-5 py-20 sm:py-28 text-center">
+    <span class="inline-block text-xs font-semibold tracking-widest uppercase text-ai mb-6 border border-ai/40 rounded-full px-4 py-1.5">
+      Forensic Analysis &middot; oven-sh/bun
+    </span>
+    <h1 class="text-white font-black tracking-tight leading-[1.05] text-4xl sm:text-6xl lg:text-7xl">
+      How Claude Code Rewrote<br class="hidden sm:block" />
+      <span class="bg-gradient-to-r from-ai to-fuchsia-400 bg-clip-text text-transparent">1&nbsp;Million&nbsp;Lines</span> of Bun
+    </h1>
+    <p class="mt-6 text-lg sm:text-xl text-white/70 max-w-2xl mx-auto leading-relaxed">
+      A forensic analysis of PR&nbsp;#30412 — 6,755 commits, 10 days, one AI agent.
+    </p>
+
+    <div class="mt-10 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+      <div class="grad-purple pill-shadow rounded-2xl px-6 py-4 text-left">
+        <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">1,009,257</div>
+        <div class="text-xs font-medium text-white/70 uppercase tracking-wide">lines added</div>
+      </div>
+      <div class="grad-purple pill-shadow rounded-2xl px-6 py-4 text-left">
+        <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">6,755</div>
+        <div class="text-xs font-medium text-white/70 uppercase tracking-wide">commits</div>
+      </div>
+      <div class="grad-purple pill-shadow rounded-2xl px-6 py-4 text-left">
+        <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">10</div>
+        <div class="text-xs font-medium text-white/70 uppercase tracking-wide">days</div>
+      </div>
+    </div>
+
+    <div class="mt-10">
+      <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
+         class="inline-flex items-center gap-2 text-sm font-semibold text-white border border-white/25 hover:border-white/60 hover:bg-white/5 transition rounded-lg px-5 py-3">
+        Read PR&nbsp;#30412 on GitHub
+        <span aria-hidden="true">&rarr;</span>
+      </a>
+      <p class="mt-4 text-xs text-white/40">Merged into <span class="mono">oven-sh/bun</span> on May&nbsp;14,&nbsp;2026</p>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 2. TL;DR ============ -->
+<section id="tldr" class="bg-white">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <div class="flex items-center gap-3 mb-2">
+      <span class="text-xs font-bold tracking-widest uppercase text-ai">Executive Summary</span>
+    </div>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-8">TL;DR</h2>
+    <ul class="space-y-5 text-lg sm:text-xl leading-relaxed text-slate-700">
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
+        <span><strong class="text-ink">The claim.</strong> Anthropic's Claude Code rewrote Bun's entire Zig
+        codebase in Rust — over a million lines — and the PR was merged into <span class="mono">oven-sh/bun</span>
+        on May&nbsp;14,&nbsp;2026.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
+        <span><strong class="text-ink">The commits are real.</strong> They were not rebased, squashed, or
+        fabricated. 99.2% of commits have an author timestamp that matches the committer timestamp within two
+        seconds — the signature of code written and committed in a continuous live stream.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
+        <span><strong class="text-ink">The approach was structured.</strong> Work moved through explicit phases
+        labeled <span class="mono">a&nbsp;&rarr;&nbsp;h</span>, with multiple sub-agent branches — every one of
+        them named <span class="mono">claude/*</span> — merging fixes back into the main port branch.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
+        <span><strong class="text-ink">The speed has a simple explanation.</strong> Commits land roughly every
+        nine seconds because the agent writes and commits <em>without compiling</em>. Verification is
+        asynchronous — pushed off to CI and to dedicated fix-up branches.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-concern"></span>
+        <span><strong class="text-ink">The hard questions remain open.</strong> Code quality, the 14,000+
+        unsafe blocks still in the tree, and whether a 1M-line change with no human line-by-line review can be
+        meaningfully audited — none of that is settled by the commit history alone.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 3. THE CLAIM ============ -->
+<section id="claim" class="bg-surface">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Background</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">The Claim</h2>
+    <div class="space-y-5 text-lg leading-relaxed text-slate-700">
+      <p>
+        Bun's creator, <strong class="text-ink">Jarred Sumner</strong>, has been increasingly public about a
+        shift in how the runtime is built: that AI now writes essentially all of the code. PR&nbsp;#30412 is the
+        clearest expression of that claim to date — a complete reimplementation of Bun's Zig core in Rust,
+        attributed end to end to Anthropic's <strong class="text-ink">Claude&nbsp;Code</strong> agent. Sumner's
+        framing was blunt: the human role is direction and review, not authorship.
+      </p>
+      <p>
+        Coverage in <strong class="text-ink">The Register</strong> and elsewhere amplified the headline number —
+        a million-plus lines of a memory-safe rewrite, landed in a window measured in days — and treated it as a
+        milestone moment for autonomous coding agents. Anthropic, for its part, has demonstrated Claude&nbsp;Code
+        running long-horizon engineering tasks with sub-agents, CI integration, and self-triage of failures: the
+        exact pattern the PR's branch topology shows.
+      </p>
+      <p>
+        That is the story as told. The rest of this page is the story as the git history actually records it —
+        no press release, no speculation, just what 6,755 commits reveal when you read every one of them.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. METHODOLOGY ============ -->
+<section id="methodology" class="bg-white">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Methodology</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">What We Found — and How</h2>
+    <div class="rounded-2xl border border-slate-200 bg-surface p-6 sm:p-8">
+      <p class="text-base text-slate-600 mb-6">
+        Everything below is derived from public GitHub data. The process was deliberately mechanical so that any
+        claim here can be independently re-checked:
+      </p>
+      <ul class="space-y-4 text-base text-slate-700">
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">01</span>
+          <span><strong>Cloned the repo</strong> as a blobless clone — about 56&nbsp;MB — enough to walk the full
+          commit graph without pulling every file blob.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">02</span>
+          <span><strong>Extracted all 6,755 commits</strong> via <span class="mono">git log</span>, capturing
+          SHA, author, committer, both timestamps, message, and parent SHAs.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">03</span>
+          <span><strong>Compared author vs. committer timestamps</strong> for every single commit — the
+          definitive test for whether history was rebased or rewritten after the fact.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">04</span>
+          <span><strong>Sampled raw git objects</strong> with <span class="mono">git cat-file -p</span> to confirm
+          the commit objects are well-formed and not synthetic.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">05</span>
+          <span><strong>Analyzed the parent chain</strong> to separate linear commits from merge commits, and
+          mapped which branches merged into the PR branch and how often.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">06</span>
+          <span><strong>Inspected diff sizes per inter-commit gap bucket</strong> — to see whether fast commits
+          carry small diffs (write-only) or large diffs (something else).</span>
+        </li>
+      </ul>
+      <p class="text-sm text-slate-500 mt-6 pt-6 border-t border-slate-200">
+        No speculation about intent. Where the data is ambiguous, this page says so explicitly. The analysis
+        scripts live alongside this page in the repository.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. TIMELINE ============ -->
+<section id="timeline" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 01</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Timeline</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      The commit timestamps make it look like the work happened in a blur. The calendar tells a more grounded
+      story.
+    </p>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits per day</h3>
+      <p class="text-xs text-slate-500 mb-4">May 4 &ndash; May 14, 2026 &middot; n = 6,755</p>
+      <div class="chart-box" style="height: 360px;">
+        <canvas id="chartCommitsPerDay"></canvas>
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4 mt-6">
+      <div class="rounded-xl border-l-4 border-ai bg-white p-5">
+        <div class="text-xs font-bold uppercase tracking-wide text-ai mb-1">May 06 &middot; Peak</div>
+        <p class="text-sm text-slate-700"><strong>2,906 commits in a single day</strong> — the Phase&nbsp;D/E
+        bulk porting window, where mechanical Zig&rarr;Rust translation ran flat out.</p>
+      </div>
+      <div class="rounded-xl border-l-4 border-caution bg-white p-5">
+        <div class="text-xs font-bold uppercase tracking-wide text-caution mb-1">May 10 &middot; The Gap</div>
+        <p class="text-sm text-slate-700"><strong>Only 47 commits</strong> — a visible trough that reads as a
+        compile-and-test cycle: the agent waiting on verification rather than generating.</p>
+      </div>
+    </div>
+
+    <div class="mt-8 space-y-4 text-lg leading-relaxed text-slate-700">
+      <p>
+        The real span is <strong class="text-ink">9.8 days</strong>, May&nbsp;4 through May&nbsp;14 — not the
+        "hours" that a naive read of the densely-packed commit timestamps might suggest. Code started flowing on
+        <strong class="text-ink">May&nbsp;4</strong>, four days <em>before</em> the PR was even opened on
+        <strong class="text-ink">May&nbsp;8</strong>. The PR was then merged on <strong
+        class="text-ink">May&nbsp;14</strong>.
+      </p>
+      <p>
+        That ordering matters. The PR is the visible tip; the work behind it had a substantial running start.
+        The two highest-volume days, May&nbsp;6 and May&nbsp;7, account for nearly 4,500 commits between them —
+        two-thirds of the entire effort compressed into 48 hours of the porting phases.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. AGENT ARCHITECTURE ============ -->
+<section id="architecture" class="bg-white">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 02</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Agent Architecture</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      This is the most revealing part of the history. The PR was not one agent typing in a straight line — it
+      was a main porting branch with a fleet of specialized sub-agent branches feeding fixes back into it.
+    </p>
+
+    <!-- Branch topology diagram -->
+    <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto">
+      <div class="mono text-xs sm:text-sm leading-relaxed min-w-[560px]">
+        <div class="text-white/50 mb-4">// branch topology — sub-agents merge INTO the PR branch</div>
+
+        <div class="flex items-center gap-3 mb-1">
+          <span class="text-verified font-bold">claude/phase-a-port</span>
+          <span class="text-white/40">&larr; the PR branch (main line of work)</span>
+        </div>
+        <div class="text-white/20 ml-2">│</div>
+
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/unsafe-5k</span>
+          <span class="text-caution font-bold">×27</span>
+          <span class="text-white/50">unsafe-block elimination campaign</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/bench-until-green</span>
+          <span class="text-caution font-bold">×19</span>
+          <span class="text-white/50">continuous benchmark-tuning loop</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/flaky-stabilize*</span>
+          <span class="text-caution font-bold">×3</span>
+          <span class="text-white/50">flaky-test repair</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/ci-auto-fix-{N}</span>
+          <span class="text-caution font-bold">×4</span>
+          <span class="text-white/50">automated CI-failure handling</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/divergence-fix-all</span>
+          <span class="text-caution font-bold">×2</span>
+          <span class="text-white/50">Zig&rarr;Rust spec-correctness fixes</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">└──&lt;</span>
+          <span class="text-ai font-semibold">claude/security-audit-patches</span>
+          <span class="text-caution font-bold">×1</span>
+          <span class="text-white/50">security review</span>
+        </div>
+
+        <div class="text-white/50 mt-4">// every branch is namespaced <span class="text-ai">claude/*</span> — 276 merge commits total</div>
+      </div>
+    </div>
+    <p class="text-sm text-slate-500 mt-3">
+      Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main
+      port branch — the campaign re-ran until its goal condition was met.
+    </p>
+
+    <!-- Phase breakdown chart -->
+    <div class="rounded-2xl border border-slate-200 bg-surface p-5 sm:p-7 mt-10">
+      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits by phase</h3>
+      <p class="text-xs text-slate-500 mb-4">Where the 6,755 commits actually went</p>
+      <div class="chart-box" style="height: 340px;">
+        <canvas id="chartPhases"></canvas>
+      </div>
+    </div>
+
+    <!-- Phase glossary -->
+    <h3 class="text-xl font-black tracking-tight mt-10 mb-4">What each phase means</h3>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-b — gating &amp; verify</div>
+        <p class="text-sm text-slate-600">Wrapping Zig types behind Rust gates and verifying correctness one
+        tier at a time before opening the floodgates.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-c — cleanup passes</div>
+        <p class="text-sm text-slate-600">Intermediate sweeps that tidy the tree between the heavy structural
+        phases.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-d — the core port</div>
+        <p class="text-sm text-slate-600">The mechanical Zig&rarr;Rust translation of <span
+        class="mono">bun_runtime</span>, the bundler, unsafe blocks, and TODO items. The single largest phase.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-e — RAII conversion</div>
+        <p class="text-sm text-slate-600">Giving Rust ownership to resources that Zig managed by hand —
+        translating manual lifecycles into RAII patterns.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-f — further cleanup</div>
+        <p class="text-sm text-slate-600">A second cleanup wave after RAII conversion settles the ownership
+        model.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-g — harvest</div>
+        <p class="text-sm text-slate-600">Collecting and cataloging remaining work — building the to-do list
+        for the final phase.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-surface p-5 sm:col-span-2">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-h — unsafe-wrap</div>
+        <p class="text-sm text-slate-600">Systematic wrapping of the 14,000+ remaining <span
+        class="mono">unsafe</span> sites — the long tail of memory-safety work that a Rust rewrite is supposed
+        to be <em>about</em>. It is here that the open questions get sharpest.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7. COMMIT SPEED PARADOX ============ -->
+<section id="paradox" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 03</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Commit-Speed Paradox</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      A commit every nine seconds is impossible if each commit includes a Rust compile. So either the timeline
+      is fake — or the agent is not compiling between commits. The data points firmly at the second one.
+    </p>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+      <h3 class="text-sm font-bold text-slate-700 mb-1">Inter-commit gap distribution</h3>
+      <p class="text-xs text-slate-500 mb-4">Time between consecutive commits &middot; n = 6,754 gaps</p>
+      <div class="chart-box" style="height: 320px;">
+        <canvas id="chartGaps"></canvas>
+      </div>
+      <div class="flex flex-wrap gap-4 mt-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-verified inline-block"></span>fast — pure write, no compile</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-caution inline-block"></span>medium</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-concern inline-block"></span>long — likely compile + test</span>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mt-8">
+      <div>
+        <h3 class="text-lg font-black mb-3">What you'd expect</h3>
+        <p class="text-base text-slate-700 leading-relaxed">
+          A sane per-commit cycle for a Rust project: write the code (~1&nbsp;min), compile (3&ndash;10&nbsp;min
+          for a large crate graph), run the relevant tests (~30&nbsp;s). That is <strong
+          class="text-ink">5&ndash;12 minutes</strong> per commit, minimum.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-lg font-black mb-3">What actually happened</h3>
+        <p class="text-base text-slate-700 leading-relaxed">
+          <strong class="text-ink">74% of commits land in under 30 seconds.</strong> More than 4,400 of the
+          6,754 gaps are 30&nbsp;seconds or shorter. There is simply no compile happening inside that window.
+        </p>
+      </div>
+    </div>
+
+    <!-- Resolution -->
+    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8 mt-8">
+      <h3 class="text-xl font-black text-ink mb-4">The resolution: write and verify are decoupled</h3>
+      <p class="text-base text-slate-700 leading-relaxed mb-5">
+        The agent does not gate each commit on compilation. It runs two loops at completely different speeds:
+      </p>
+
+      <!-- Two-loop diagram -->
+      <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
+          <div class="text-2xl font-black text-ink mb-1">~9s median</div>
+          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span
+          class="mono">git commit</span>. No compilation. Just write and record.</p>
+        </div>
+        <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
+        <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
+          <div class="text-2xl font-black text-ink mb-1">hours</div>
+          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span
+          class="mono">ci-auto-fix</span>, <span class="mono">divergence-fix</span>) repair them &rarr; merge
+          back.</p>
+        </div>
+      </div>
+
+      <ul class="mt-6 space-y-3 text-base text-slate-700">
+        <li class="flex gap-3">
+          <span class="text-ai font-bold shrink-0">&rarr;</span>
+          <span>Nine seconds is roughly the <strong>inference time</strong> for ~430 output tokens at
+          ~150&nbsp;tok/s — it is generation latency, not build latency.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-ai font-bold shrink-0">&rarr;</span>
+          <span>The diff sizes corroborate it: commits in the 0&ndash;5&nbsp;second band average just
+          <strong>60&ndash;72 lines changed across 1&ndash;3 files</strong> — exactly what one focused
+          generation step produces.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="text-ai font-bold shrink-0">&rarr;</span>
+          <span>The longer-gap commits (the red band) are where compile-and-test feedback actually lands —
+          and those are the minority.</span>
+        </li>
+      </ul>
+    </div>
+
+    <p class="text-base text-slate-600 mt-6 leading-relaxed">
+      So the "impossible" speed is real and also mundane. The history is not fabricated. The agent simply
+      treats compilation as an <em>asynchronous</em> concern handled by a separate loop — which is efficient,
+      and also exactly why the open questions about correctness exist.
+    </p>
+  </div>
+</section>
+
+<!-- ============ 8. TOKEN MATH ============ -->
+<section id="tokens" class="bg-white">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 04</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Token Math</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      Does the volume even add up for a single agent? Run the back-of-envelope numbers and it does — with room
+      to spare.
+    </p>
+
+    <div class="overflow-x-auto rounded-2xl border border-slate-200">
+      <table class="w-full text-left text-sm sm:text-base">
+        <thead class="bg-ink text-white">
+          <tr>
+            <th class="px-5 py-3 font-semibold">Quantity</th>
+            <th class="px-5 py-3 font-semibold">Calculation</th>
+            <th class="px-5 py-3 font-semibold text-right">Result</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white">
+          <tr>
+            <td class="px-5 py-4 font-medium text-ink">Output tokens</td>
+            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">1,009,257 lines &times; 6 tokens/line</td>
+            <td class="px-5 py-4 text-right font-bold tabular-nums">~6.1M tokens</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-medium text-ink">Pure generation time</td>
+            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">6.1M &divide; 150 tok/s (single Sonnet)</td>
+            <td class="px-5 py-4 text-right font-bold tabular-nums">~11.2 hours</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-medium text-ink">Effective throughput</td>
+            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">11.2h of work &divide; 235h real span</td>
+            <td class="px-5 py-4 text-right font-bold tabular-nums">~7 tok/s &middot; 4.7% duty cycle</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-medium text-ink">Estimated cost</td>
+            <td class="px-5 py-4 text-slate-600 mono text-xs sm:text-sm">~$91 output + ~$18 input (w/ caching)</td>
+            <td class="px-5 py-4 text-right font-bold tabular-nums text-ai">~$109 total</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rounded-2xl bg-ai/5 border border-ai/30 p-6 sm:p-8 mt-8">
+      <h3 class="text-lg font-black text-ink mb-2">The key takeaway</h3>
+      <p class="text-base text-slate-700 leading-relaxed">
+        A <strong>single Claude&nbsp;Code agent</strong> running at a modest ~4.7% duty cycle — generating only
+        about one second in twenty over a ten-day window — comfortably produces this volume. No parallel fleet
+        of dozens of models is required to explain the line count. The sub-agent branches are about
+        <em>specialization and verification</em>, not raw generation throughput. And at roughly
+        <strong>$109</strong> in model spend, the economics are almost beside the point.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 9. OPEN QUESTIONS ============ -->
+<section id="questions" class="bg-surface">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-concern">Section 05</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Open Questions for Experts</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      The commit history proves the work happened and how fast. It does not prove the result is
+      <em>good</em>. These four questions are where domain experts — in Rust, in systems security, in
+      software supply chain — should be looking. Expand each for the detail.
+    </p>
+
+    <div class="space-y-4">
+      <!-- Q1 -->
+      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
+          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
+          <span class="flex-1">
+            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 01</span>
+            <span class="block text-lg sm:text-xl font-black text-ink">Code Quality &amp; Correctness</span>
+          </span>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
+          <p>The PR reports a <strong>99.8% test pass rate</strong> on Linux x64/glibc. That headline is strong
+          — but the unexamined 0.2% is exactly where subtle correctness bugs hide, and a rewrite of this size
+          has a lot of surface area.</p>
+          <p>The deeper question is idiomatic quality: is this <em>real</em> Rust, or is it Zig mechanically
+          transliterated into Rust syntax? The two compile the same and behave very differently under
+          maintenance.</p>
+          <p>The commit messages themselves show extensive automated diff-review passes — entries like
+          "diff-review caught N bugs" recur throughout. That is encouraging, but it raises the obvious
+          question: <strong>who reviews the reviewer?</strong> And phase-b2 commits explicitly mention
+          "cache-hidden errors from T5" — errors that only surface later in the pipeline, after the commit
+          that introduced them is long buried.</p>
+        </div>
+      </details>
+
+      <!-- Q2 -->
+      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
+          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
+          <span class="flex-1">
+            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 02</span>
+            <span class="block text-lg sm:text-xl font-black text-ink">Memory Safety — The Unsafe Problem</span>
+          </span>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
+          <p>This is the sharpest concern. The entire point of rewriting in Rust is memory safety — yet the
+          phase-h commit messages reference <strong>"14,470 unsafe sites after r2"</strong> and
+          <strong>"15,084 unsafe sites before r1."</strong> The tree is saturated with <span
+          class="mono">unsafe</span> blocks.</p>
+          <p>The <span class="mono">claude/unsafe-5k</span> branch ran <strong>27 times</strong> to chip away at
+          them, but the net progress is hard to read from the outside. One representative commit —
+          <span class="mono">"phase-h: unsafe-wrap r4 — 672 sites / 23 strategies (&minus;477 unsafe)"</span> —
+          shows roughly <strong>470 sites removed per round</strong>.</p>
+          <p>At that rate, clearing 14,000+ remaining unsafe sites is <strong>dozens more passes</strong> of
+          work that had not happened when the PR merged. A Rust codebase this dense with <span
+          class="mono">unsafe</span> may be meaningfully <em>less</em> safe than a carefully hand-written Rust
+          codebase — and arguably no safer than the Zig it replaced, until that long tail is actually
+          retired.</p>
+        </div>
+      </details>
+
+      <!-- Q3 -->
+      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
+          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
+          <span class="flex-1">
+            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 03</span>
+            <span class="block text-lg sm:text-xl font-black text-ink">Performance Claims</span>
+          </span>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
+          <p>The PR claims benchmarks are "neutral or faster." But the <span
+          class="mono">claude/bench-until-green</span> branch ran <strong>19 rounds</strong> of optimization
+          before merge — and the name says the quiet part out loud.</p>
+          <p>That is textbook <strong>selection bias</strong>: run the benchmarks, tune the code until they
+          pass, then merge. It tells you the code <em>can</em> hit those numbers on those benchmarks — not that
+          it is robustly fast across workloads the benchmark suite does not cover.</p>
+          <p>To be fair: the <strong>binary-size reduction of 3&ndash;8&nbsp;MB is real</strong> and trivially
+          verifiable by anyone — that one is not in question. But AI-tuned micro-optimizations have a known
+          failure mode: they are brittle, tightly coupled to the exact benchmark shape, and prone to silent
+          regression as the surrounding code changes.</p>
+        </div>
+      </details>
+
+      <!-- Q4 -->
+      <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-surface transition">
+          <span class="chev text-concern font-black text-xl shrink-0">&rsaquo;</span>
+          <span class="flex-1">
+            <span class="block text-xs font-bold uppercase tracking-wide text-concern">Question 04</span>
+            <span class="block text-lg sm:text-xl font-black text-ink">Reproducibility &amp; Auditability</span>
+          </span>
+        </summary>
+        <div class="px-5 sm:px-6 pb-6 pl-14 sm:pl-16 space-y-3 text-base text-slate-700 leading-relaxed">
+          <p>One million lines merged into a production runtime with <strong>no human line-by-line code
+          review</strong> is, simply, unprecedented. There is no prior playbook for auditing a change this
+          large.</p>
+          <p>The history shows a <span class="mono">ci-errors-to-tasks</span> script: the agent auto-triages CI
+          failures into its own task queue. Efficient — but it also means a human may never have seen the
+          individual failures, only the aggregate green checkmark at the end.</p>
+          <p>Then there is <strong>supply-chain trust</strong>. If Claude&nbsp;Code carried a subtle bug in one
+          translation pattern, that bug would not appear once — it would appear <em>consistently across a
+          million lines</em>, everywhere the pattern was applied. Systematic errors are the hardest kind to
+          catch by sampling.</p>
+          <p>And the PR was merged by a <strong>single person</strong>, Jarred&nbsp;Sumner. At this scale, it
+          is a genuinely open question what the word "review" can even mean.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10. TECHNICAL APPENDIX ============ -->
+<section id="appendix" class="bg-white">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Appendix</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-6">Technical Appendix</h2>
+
+    <details class="group rounded-2xl border border-slate-200 bg-surface overflow-hidden">
+      <summary class="flex items-center gap-4 p-5 sm:p-6 hover:bg-white transition">
+        <span class="chev text-ai font-black text-xl shrink-0">&rsaquo;</span>
+        <span class="text-lg font-black text-ink">Proofs, raw objects, and how to reproduce</span>
+      </summary>
+      <div class="px-5 sm:px-6 pb-8 pl-14 sm:pl-16 space-y-8 text-base text-slate-700 leading-relaxed">
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-2">The git object model — how same-second commits work</h3>
+          <p>A git commit is just an immutable object: a tree hash, parent hash(es), author line, committer
+          line, and a message. Creating one is a hash computation — no compilation, no test run, nothing that
+          touches the build system. There is nothing in git itself that prevents two commits from sharing a
+          one-second timestamp. When an agent generates code and calls <span class="mono">git commit</span>
+          back to back, sub-second and same-second gaps are the expected outcome, not an anomaly.</p>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-2">Author vs. committer timestamp proof</h3>
+          <p>Every git commit carries two timestamps: <em>author</em> (when the change was written) and
+          <em>committer</em> (when the commit object was created). A rebase, squash, or history rewrite
+          changes the committer timestamp while preserving the author timestamp — opening a measurable gap
+          between them. In PR&nbsp;#30412, <strong>6,699 of 6,755 commits</strong> have an author/committer
+          delta of under two seconds. That 99.2% is the fingerprint of history written live and never
+          rewritten. The 56 outliers are consistent with ordinary merge mechanics.</p>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-2">Parent-chain topology</h3>
+          <p>Of the 6,755 commits, <strong>6,479 are linear</strong> (exactly one parent) and
+          <strong>276 are merge commits</strong> (two or more parents). The merge commits are precisely the
+          points where the <span class="mono">claude/*</span> sub-agent branches fold their fixes back into the
+          main port branch — the structural evidence for the two-loop architecture described above.</p>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-2">Raw git object sample</h3>
+          <pre class="mono text-xs bg-ink text-slate-200 rounded-xl p-4 overflow-x-auto leading-relaxed"><span class="text-verified">$ git cat-file -p 6033d71077a2be04405e6c443bf9a30ccf34d293</span>
+tree    4b1c9e2a7f3d8061c5e4a9b2d7f0e3c6a8b1d4f7
+parent  89b9a180d90775788f8835efecbd63c27477b62f
+author    Jarred Sumner &lt;jarred@jarredsumner.com&gt; 1747085342 +0000
+committer Jarred Sumner &lt;jarred@jarredsumner.com&gt; 1747085342 +0000
+
+perf: ConcurrentTask intrusive Link — drop packed-ptr
+unpack on enqueue hot path (server)</pre>
+          <p class="text-sm text-slate-500 mt-2">A well-formed, ordinary commit object. Author and committer
+          epochs are identical (<span class="mono">1747085342</span>) — no rewrite.</p>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-2">How to reproduce this analysis</h3>
+          <ol class="list-decimal ml-5 space-y-1 text-sm">
+            <li>Blobless-clone the repo: <span class="mono">git clone --filter=blob:none https://github.com/oven-sh/bun</span></li>
+            <li>Check out the PR&nbsp;#30412 head and walk it with <span class="mono">git log</span> against the merge base.</li>
+            <li>Export every commit's SHA, author/committer identities, both timestamps, message, and parents.</li>
+            <li>Bucket inter-commit gaps; compare author vs. committer deltas; tag commits by phase from the message prefix.</li>
+            <li>The full extraction and analysis scripts — <span class="mono">git_forensics.py</span> and
+            <span class="mono">analyze_bun_pr.py</span> — ship in this repository alongside this page, together
+            with the raw <span class="mono">all_commits_git.tsv</span> dataset.</li>
+          </ol>
+        </div>
+
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ 11. FOOTER ============ -->
+<footer class="bg-ink">
+  <div class="max-w-4xl mx-auto px-5 py-12 text-center">
+    <div class="flex items-center justify-center gap-2 mb-3">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-ai"></span>
+      <span class="text-white font-bold tracking-tight">PR&nbsp;#30412 Forensic Analysis</span>
+    </div>
+    <p class="text-sm text-white/50 max-w-xl mx-auto leading-relaxed">
+      Analysis based entirely on public GitHub data. All extraction and analysis scripts are available in this
+      repository — every figure on this page can be independently re-checked.
+    </p>
+    <p class="text-sm text-white/40 mt-4">
+      <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
+         class="text-ai hover:text-fuchsia-400 transition font-medium">PR&nbsp;#30412</a>
+      &middot; <span class="mono">oven-sh/bun</span>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // Shared palette
+  var COLOR = {
+    ai: '#7C3AED',
+    aiDark: '#4C1D95',
+    verified: '#10B981',
+    caution: '#F59E0B',
+    concern: '#EF4444',
+    ink: '#0F172A',
+    grid: 'rgba(15, 23, 42, 0.08)',
+    tick: 'rgba(15, 23, 42, 0.55)',
+  };
+
+  // Build a vertical purple gradient for the bar fill.
+  // Falls back to a flat color if the 2D context is unavailable.
+  function purpleGradient(ctx, area) {
+    if (!ctx || !area) return COLOR.ai;
+    var g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    g.addColorStop(0, COLOR.ai);
+    g.addColorStop(1, COLOR.aiDark);
+    return g;
+  }
+
+  var baseTooltip = {
+    backgroundColor: COLOR.ink,
+    titleColor: '#fff',
+    bodyColor: '#E2E8F0',
+    padding: 10,
+    cornerRadius: 8,
+    displayColors: false,
+  };
+
+  // ---- Chart 1: Commits per day ----
+  var dayCanvas = document.getElementById('chartCommitsPerDay');
+  if (dayCanvas) {
+    var dayLabels = ['May 04', 'May 05', 'May 06', 'May 07', 'May 08',
+                     'May 09', 'May 10', 'May 11', 'May 12', 'May 13', 'May 14'];
+    var dayValues = [20, 74, 2906, 1568, 724, 269, 47, 285, 675, 171, 16];
+    var annotations = {
+      'May 06': 'Peak: 2,906 commits — Phase D/E bulk porting',
+      'May 10': 'Gap — compile / test cycle',
+    };
+    new Chart(dayCanvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: dayLabels,
+        datasets: [{
+          label: 'Commits',
+          data: dayValues,
+          borderRadius: 6,
+          borderSkipped: false,
+          backgroundColor: function (c) {
+            var chart = c.chart;
+            return purpleGradient(chart.ctx, chart.chartArea);
+          },
+          hoverBackgroundColor: COLOR.ai,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, baseTooltip, {
+            callbacks: {
+              label: function (item) {
+                return item.formattedValue + ' commits';
+              },
+              afterLabel: function (item) {
+                var note = annotations[item.label];
+                return note ? '→ ' + note : '';
+              },
+            },
+          }),
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: COLOR.tick, font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            grid: { color: COLOR.grid },
+            ticks: { color: COLOR.tick, font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+
+  // ---- Chart 2: Commits by phase (horizontal bar) ----
+  var phaseCanvas = document.getElementById('chartPhases');
+  if (phaseCanvas) {
+    var phaseRows = [
+      { label: 'phase-d — Bun runtime porting', value: 2229 },
+      { label: 'other — infra, perf, build',    value: 1884 },
+      { label: 'phase-e — RAII / port',          value: 1531 },
+      { label: 'phase-b — gating / verify',      value: 352 },
+      { label: 'phase-h — unsafe wrap',          value: 128 },
+      { label: 'perf — benchmark tuning',        value: 128 },
+      { label: 'phase-f — cleanup',              value: 107 },
+    ];
+    new Chart(phaseCanvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: phaseRows.map(function (r) { return r.label; }),
+        datasets: [{
+          label: 'Commits',
+          data: phaseRows.map(function (r) { return r.value; }),
+          borderRadius: 5,
+          borderSkipped: false,
+          backgroundColor: function (c) {
+            var chart = c.chart;
+            return purpleGradient(chart.ctx, chart.chartArea) || COLOR.ai;
+          },
+          hoverBackgroundColor: COLOR.ai,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, baseTooltip, {
+            callbacks: {
+              label: function (item) {
+                return item.formattedValue + ' commits';
+              },
+            },
+          }),
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: { color: COLOR.grid },
+            ticks: { color: COLOR.tick, font: { size: 11 } },
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: COLOR.tick, font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+
+  // ---- Chart 3: Inter-commit gap distribution (horizontal bar, color-coded) ----
+  var gapCanvas = document.getElementById('chartGaps');
+  if (gapCanvas) {
+    var gapRows = [
+      { label: '0s (sub-second)', value: 581,  tone: COLOR.verified },
+      { label: '1–5s',            value: 2204, tone: COLOR.verified },
+      { label: '6–30s',           value: 2208, tone: COLOR.caution },
+      { label: '31–120s',         value: 928,  tone: COLOR.caution },
+      { label: '2–10 min',        value: 540,  tone: COLOR.concern },
+      { label: '>10 min',         value: 293,  tone: COLOR.concern },
+    ];
+    new Chart(gapCanvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: gapRows.map(function (r) { return r.label; }),
+        datasets: [{
+          label: 'Commits',
+          data: gapRows.map(function (r) { return r.value; }),
+          backgroundColor: gapRows.map(function (r) { return r.tone; }),
+          hoverBackgroundColor: gapRows.map(function (r) { return r.tone; }),
+          borderRadius: 5,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, baseTooltip, {
+            callbacks: {
+              label: function (item) {
+                var total = gapRows.reduce(function (s, r) { return s + r.value; }, 0);
+                var pct = ((item.parsed.x / total) * 100).toFixed(1);
+                return item.formattedValue + ' commits  (' + pct + '%)';
+              },
+            },
+          }),
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: { color: COLOR.grid },
+            ticks: { color: COLOR.tick, font: { size: 11 } },
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: COLOR.tick, font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
