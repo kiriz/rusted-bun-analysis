@@ -230,12 +230,12 @@
     </a>
     <div class="hidden md:flex items-center gap-3 text-xs font-medium text-white/60">
       <a href="#tldr" class="hover:text-white transition">TL;DR</a>
+      <a href="#paradox" class="hover:text-white transition">Speed</a>
       <a href="#architecture" class="hover:text-white transition">Architecture</a>
       <a href="#engineering" class="hover:text-white transition">Eng.&nbsp;Plan</a>
       <a href="#migration" class="hover:text-white transition">Migration</a>
       <a href="#timeline" class="hover:text-white transition">Timeline</a>
       <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
-      <a href="#paradox" class="hover:text-white transition">Speed</a>
       <a href="#appendix" class="hover:text-white transition">Appendix</a>
     </div>
     <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
@@ -322,6 +322,43 @@
         machine running after the PR merged.</span>
       </li>
     </ul>
+  </div>
+</section>
+
+<!-- ============ SPEED PARADOX ============ -->
+<section id="paradox" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      Commits land every nine seconds. Rust compilation takes minutes. The agent writes and commits without compiling.
+    </p>
+
+    <p class="text-lg text-slate-700 leading-relaxed mb-8">
+      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
+      inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
+    </p>
+
+    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8">
+      <h3 class="text-xl font-black text-ink mb-5">Write and verify run on different clocks</h3>
+      <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
+          <div class="text-2xl font-black text-ink mb-1">~9s median</div>
+          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span class="mono">git commit</span>.
+          No compilation. Just write and record.</p>
+        </div>
+        <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
+        <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
+          <div class="text-2xl font-black text-ink mb-1">hours</div>
+          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span class="mono">ci-auto-fix</span>,
+          <span class="mono">divergence-fix</span>) repair them &rarr; merge back.</p>
+        </div>
+      </div>
+      <p class="text-base text-slate-700 mt-6 leading-relaxed">
+        Writing is fast. Verification is async.
+      </p>
+    </div>
   </div>
 </section>
 
@@ -728,43 +765,6 @@
       <span class="mono">-0700</span> commits are the moments where Jarred reached in directly: build wiring,
       architectural decisions, and reverts.
     </p>
-  </div>
-</section>
-
-<!-- ============ SPEED PARADOX ============ -->
-<section id="paradox" class="bg-surface">
-  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      Commits land every nine seconds. Rust compilation takes minutes. The agent writes and commits without compiling.
-    </p>
-
-    <p class="text-lg text-slate-700 leading-relaxed mb-8">
-      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
-      inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
-    </p>
-
-    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8">
-      <h3 class="text-xl font-black text-ink mb-5">Write and verify run on different clocks</h3>
-      <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
-        <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
-          <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
-          <div class="text-2xl font-black text-ink mb-1">~9s median</div>
-          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span class="mono">git commit</span>.
-          No compilation. Just write and record.</p>
-        </div>
-        <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
-        <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
-          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
-          <div class="text-2xl font-black text-ink mb-1">hours</div>
-          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span class="mono">ci-auto-fix</span>,
-          <span class="mono">divergence-fix</span>) repair them &rarr; merge back.</p>
-        </div>
-      </div>
-      <p class="text-base text-slate-700 mt-6 leading-relaxed">
-        Writing is fast. Verification is async.
-      </p>
-    </div>
   </div>
 </section>
 
