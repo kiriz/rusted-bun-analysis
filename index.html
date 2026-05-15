@@ -232,6 +232,7 @@
       <a href="#tldr" class="hover:text-white transition">TL;DR</a>
       <a href="#architecture" class="hover:text-white transition">Architecture</a>
       <a href="#engineering" class="hover:text-white transition">Eng.&nbsp;Plan</a>
+      <a href="#migration" class="hover:text-white transition">Migration</a>
       <a href="#timeline" class="hover:text-white transition">Timeline</a>
       <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
       <a href="#paradox" class="hover:text-white transition">Speed</a>
@@ -312,6 +313,13 @@
         <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,635 commits are
         <span class="mono">+0000</span> UTC (Claude Code's automated environment); 38 are <span class="mono">-0700</span>
         Pacific (Jarred Sumner on his Mac). The split marks exactly where the human intervened.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
+        <span><strong class="text-ink">The migration is ~90% complete, not finished.</strong> 710,139 lines of the
+        original Zig remain in the repo &mdash; not compiled, not shipped, kept as semantic reference while
+        the agent ports the remaining ~113 files. <span class="mono">scripts/port-batch.ts</span> keeps the
+        machine running after the PR merged.</span>
       </li>
     </ul>
   </div>
@@ -557,6 +565,68 @@
         <strong class="text-ink">irregular and proportional to crate complexity</strong>.
         The natural cadence of a <em>compile&rarr;fix&rarr;recompile</em> loop.
       </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MIGRATION STATUS ============ -->
+<section id="migration" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Migration Status</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      PR #30412 is a checkpoint, not a finish line. The original Zig stays in the repo as a reference layer while the port continues.
+    </p>
+
+    <div class="grid sm:grid-cols-3 gap-5 mb-8">
+      <div class="rounded-2xl border-2 border-verified bg-verified/5 p-6">
+        <div class="text-4xl font-black text-verified tabular-nums mb-1">982,554</div>
+        <div class="mono text-sm font-bold text-ink mb-2">.rs lines — compiled &amp; shipped</div>
+        <p class="text-xs text-slate-600">58% of native source. The Rust build owns the binary; Zig no longer compiles.</p>
+      </div>
+      <div class="rounded-2xl border-2 border-caution bg-caution/5 p-6">
+        <div class="text-4xl font-black text-caution tabular-nums mb-1">710,139</div>
+        <div class="mono text-sm font-bold text-ink mb-2">.zig lines — reference only</div>
+        <p class="text-xs text-slate-600">42% of native source. Not compiled, not shipped. Kept as semantic source-of-truth while porting continues.</p>
+      </div>
+      <div class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-6">
+        <div class="text-4xl font-black text-slate-600 tabular-nums mb-1">113</div>
+        <div class="mono text-sm font-bold text-ink mb-2">files still pending</div>
+        <p class="text-xs text-slate-600">Zig files with no .rs sibling yet. The remaining porting queue.</p>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 mb-6">
+      <h3 class="text-base font-black text-ink mb-4">Largest files still in the queue</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-ink text-white">
+            <tr>
+              <th class="px-4 py-2.5 font-semibold">File</th>
+              <th class="px-4 py-2.5 font-semibold">Subsystem</th>
+              <th class="px-4 py-2.5 font-semibold text-right">Zig LOC</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 mono text-xs sm:text-sm">
+            <tr><td class="px-4 py-2.5 text-caution">js_printer.zig</td><td class="px-4 py-2.5 text-slate-600">JS code printer</td><td class="px-4 py-2.5 text-right text-slate-500">6,422</td></tr>
+            <tr><td class="px-4 py-2.5 text-caution">shell.zig</td><td class="px-4 py-2.5 text-slate-600">Shell interpreter</td><td class="px-4 py-2.5 text-right text-slate-500">4,706</td></tr>
+            <tr><td class="px-4 py-2.5 text-caution">sys.zig</td><td class="px-4 py-2.5 text-slate-600">OS syscall layer</td><td class="px-4 py-2.5 text-right text-slate-500">4,703</td></tr>
+            <tr><td class="px-4 py-2.5 text-caution">resolver.zig</td><td class="px-4 py-2.5 text-slate-600">Module resolver</td><td class="px-4 py-2.5 text-right text-slate-500">4,388</td></tr>
+            <tr><td class="px-4 py-2.5 text-caution">sys/windows/windows.zig</td><td class="px-4 py-2.5 text-slate-600">Windows platform</td><td class="px-4 py-2.5 text-right text-slate-500">4,108</td></tr>
+            <tr><td class="px-4 py-2.5 text-caution">server.zig</td><td class="px-4 py-2.5 text-slate-600">HTTP server</td><td class="px-4 py-2.5 text-right text-slate-500">3,855</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="rounded-xl bg-ink p-5 sm:p-6">
+      <div class="mono text-xs text-white/40 mb-2">scripts/port-batch.ts — still on the branch</div>
+      <div class="mono text-sm text-slate-300 leading-relaxed">
+        <div><span class="text-ai">// Reads manifest of remaining .zig files, checks for .rs sibling,</span></div>
+        <div><span class="text-ai">// emits batches of pending porting work for the next agent run.</span></div>
+        <div class="mt-2"><span class="text-blue-300">const</span> pending = zigFiles.<span class="text-caution">filter</span>(f =&gt; !existsSync(f.<span class="text-caution">replace</span>(<span class="text-green-300">/\.zig$/</span>, <span class="text-green-300">'.rs'</span>)));</div>
+        <div><span class="text-blue-300">const</span> batches = <span class="text-caution">chunk</span>(pending, BATCH_SIZE); <span class="text-white/40">// emit next wave</span></div>
+      </div>
+      <p class="text-white/50 text-sm mt-4">The migration did not stop when the PR merged. <span class="mono text-caution">port-batch.ts</span> is the next agent's instruction set.</p>
     </div>
   </div>
 </section>
