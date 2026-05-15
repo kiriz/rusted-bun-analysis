@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -484,6 +485,444 @@
       </div>
     </div>
   </div>
+</section>
+
+<!-- ============ BRANCH TOPOLOGY VIZ ============ -->
+<section id="viz" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Branch Topology</h2>
+    <p class="text-lg text-slate-600 mb-6 max-w-2xl">May 12, 2026 &mdash; a 6-hour window showing how agent branches, CI fix branches, and merges interlock.</p>
+
+    <div class="flex items-center gap-3 mb-4">
+      <button id="viz-play" type="button"
+        class="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition">
+        <span id="viz-play-icon">&#9654;</span>
+        <span id="viz-play-label">Play</span>
+      </button>
+      <button id="viz-reset" type="button"
+        class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+        title="Restart animation">
+        &#8634;
+      </button>
+      <span id="viz-status" class="text-xs text-slate-500 mono"></span>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 overflow-x-auto">
+      <div id="viz-wrap" style="position:relative; width:100%;">
+        <svg id="viz-svg" viewBox="0 0 1100 420" preserveAspectRatio="xMidYMid meet"
+             style="width:100%; height:auto; display:block; font-family: Inter, ui-sans-serif, system-ui, sans-serif;"></svg>
+        <div id="viz-tip"
+             style="position:absolute; pointer-events:none; opacity:0; background:#0F172A; color:#fff;
+                    padding:8px 10px; border-radius:8px; font-size:12px; line-height:1.4;
+                    box-shadow:0 4px 14px rgba(0,0,0,0.18); max-width:320px; z-index:10;
+                    transition: opacity 120ms ease;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script id="viz-data" type="application/json">{"branches":[{"id":"agent-main","label":"Agent (phase-a-port main)","color":"#7C3AED","lane":0},{"id":"claude-sub","label":"claude/* sub-branches (unsafe-5k, dedup, refactor)","color":"#2563EB","lane":1},{"id":"bench-fix","label":"bench-until-green (CI perf fix)","color":"#F59E0B","lane":2},{"id":"ci-fix","label":"ci-auto-fix / divergence (CI bot)","color":"#EF4444","lane":3},{"id":"jarred","label":"Jarred (human patches)","color":"#10B981","lane":4}],"commits":[{"s":"610dc0b2","b":"agent-main","t":1778583586,"m":true,"p":["ff2b6267","07110e66"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"07110e66","b":"claude-sub","t":1778583575,"m":false,"p":["a89e0c7b"],"l":"unsafe -4: ffi-safe-fn for ZigString__external + J","sub":"unsafe-5k"},{"s":"a89e0c7b","b":"agent-main","t":1778583573,"m":false,"p":["9159d21b"],"l":"unsafe -1: drop OSPathSliceZ::from_raw rebuild in "},{"s":"ff2b6267","b":"agent-main","t":1778583568,"m":true,"p":["dafc5f2a","99d09123"],"l":"Merge remote-tracking branch 'origin/claude/local-"},{"s":"99d09123","b":"claude-sub","t":1778583559,"m":false,"p":["14329883"],"l":"test(valkey): also gate isEnabled on docker compos","sub":"local-test-sweep"},{"s":"a93994e7","b":"agent-main","t":1778583559,"m":false,"p":["26921c73"],"l":"test(serve): skip privileged-port EACCES check whe"},{"s":"dafc5f2a","b":"agent-main","t":1778583077,"m":false,"p":["69ded5a9"],"l":"unsafe -1: use safe cppbind wrapper for Bun__RETUR"},{"s":"5a7a4a4f","b":"agent-main","t":1778583070,"m":false,"p":["d349ee43"],"l":"unsafe -5: slice-raw-parts -> ZStr/OSPathSliceZ::f"},{"s":"cb231a7f","b":"agent-main","t":1778582228,"m":true,"p":["45df313b","f346abba"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"f346abba","b":"claude-sub","t":1778582213,"m":false,"p":["df2c92ae"],"l":"unsafe -2: nonnull-asref in runtime/node (fs_event","sub":"unsafe-5k"},{"s":"8eb60133","b":"agent-main","t":1778582209,"m":false,"p":["c8075d81"],"l":"unsafe -3: backref-deref in threading (ThreadPool)"},{"s":"6d41972c","b":"agent-main","t":1778582199,"m":false,"p":["15a50a5d"],"l":"unsafe -2: backref-deref in http (h3_client Client"},{"s":"45df313b","b":"ci-fix","t":1778581573,"m":false,"p":["aa0c4057"],"l":"[autofix.ci] apply automated fixes"},{"s":"aa0c4057","b":"agent-main","t":1778581436,"m":true,"p":["64fb56b1","eb0512ee"],"l":"Merge remote-tracking branch 'origin/claude/bench-"},{"s":"64fb56b1","b":"agent-main","t":1778581078,"m":false,"p":["e601605c"],"l":"unsafe-fn-narrow: doc # Safety on tick_raw/file_po"},{"s":"79469971","b":"agent-main","t":1778581072,"m":false,"p":["a29be811"],"l":"unsafe -1: unsafe-fn-narrow in sys (dlsym_with_han"},{"s":"c87868a0","b":"agent-main","t":1778581060,"m":false,"p":["a92e3029"],"l":"unsafe -3: cell-get in sql_jsc (PostgresSQLQuery/J"},{"s":"58e91d64","b":"agent-main","t":1778579974,"m":true,"p":["ee106d67","11de13e8"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"11de13e8","b":"claude-sub","t":1778579967,"m":false,"p":["37462f9f"],"l":"unsafe -3: nonnull-asref in event_loop","sub":"unsafe-5k"},{"s":"37462f9f","b":"agent-main","t":1778579964,"m":false,"p":["1487c43b"],"l":"unsafe -15: nonnull-asref in bundler"},{"s":"eb0512ee","b":"bench-fix","t":1778579600,"m":false,"p":["39c08993"],"l":"perf: build: 2-pass startup.order resolve (relink ","sub":"bench-until-green"},{"s":"39c08993","b":"agent-main","t":1778579597,"m":false,"p":["b2a1b5f3"],"l":"perf: bun_core: drop misplaced cold-hints on Once:"},{"s":"ee106d67","b":"agent-main","t":1778579207,"m":true,"p":["ae0f53bb","f909a221"],"l":"Merge remote-tracking branch 'origin/claude/ci-aut"},{"s":"f909a221","b":"ci-fix","t":1778579193,"m":false,"p":["fb3ae599"],"l":"test: skip stale-sourcemap hot-reload test under C","sub":"ci-auto-fix-53633"},{"s":"6ca0af3b","b":"agent-main","t":1778579185,"m":false,"p":["3e7f1dab"],"l":"install: thread explicit is_root flag instead of f"},{"s":"ae0f53bb","b":"agent-main","t":1778579151,"m":false,"p":["c817c914"],"l":"unsafe -3: nonnull-asref in install"},{"s":"67113af9","b":"agent-main","t":1778579145,"m":false,"p":["20df45c6"],"l":"unsafe -12: backref-deref/nonnull-asref/slice-raw-"},{"s":"f5d1ff8e","b":"agent-main","t":1778579136,"m":false,"p":["09f2a1f5"],"l":"unsafe -7: backref-deref in jsc"},{"s":"19bd7841","b":"agent-main","t":1778578024,"m":false,"p":["318e4312"],"l":"unsafe -11: unsafe-fn-narrow in resolver (drop Ent"},{"s":"6612eeb3","b":"agent-main","t":1778577365,"m":false,"p":["b475bc20"],"l":"unsafe -1: ffi-safe-fn in runtime/webcore (DOMForm"},{"s":"8ecd519a","b":"agent-main","t":1778576769,"m":true,"p":["918fe279","b495f18b"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"b495f18b","b":"claude-sub","t":1778576758,"m":false,"p":["dc207dcf"],"l":"unsafe -3: ffi-safe-fn in jsc (bindgenConvertJSTo*","sub":"unsafe-5k"},{"s":"b4b571f2","b":"agent-main","t":1778576744,"m":false,"p":["7469ef49"],"l":"unsafe -39: nonnull-asref in io (PipeWriter parent"},{"s":"918fe279","b":"agent-main","t":1778576593,"m":false,"p":["44cee700"],"l":"windows-shim: bun_core::w! re-export (dedup-r2 rew"},{"s":"44cee700","b":"agent-main","t":1778575966,"m":true,"p":["7469ef49","6403ea32"],"l":"Merge remote-tracking branch 'origin/claude/bench-"},{"s":"7469ef49","b":"agent-main","t":1778575893,"m":true,"p":["72f24529","90ac3a04"],"l":"Merge origin/claude/unsafe-5k into claude/phase-a-"},{"s":"72f24529","b":"agent-main","t":1778575847,"m":false,"p":["7768fc3d"],"l":"Merge branch 'claude/code-dedup' into claude/phase"},{"s":"90ac3a04","b":"claude-sub","t":1778575708,"m":false,"p":["fce00364"],"l":"unsafe -31: nonnull-asref in uws","sub":"unsafe-5k"},{"s":"9292bf1c","b":"agent-main","t":1778575708,"m":false,"p":["ce64a164"],"l":"unsafe -11: backref-deref/nonnull-asref in resolve"},{"s":"6403ea32","b":"bench-fix","t":1778575277,"m":false,"p":["2382b429"],"l":"fixup: ThreadPool drop prewarm_mimalloc_numa \u2014 _mi","sub":"bench-until-green"},{"s":"7768fc3d","b":"agent-main","t":1778574315,"m":false,"p":["691b9fcd"],"l":"unsafe -16: unsafe-fn-narrow in resolver (fs/lib)"},{"s":"a83f716e","b":"agent-main","t":1778573542,"m":true,"p":["12153689","55283505"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"55283505","b":"claude-sub","t":1778573535,"m":false,"p":["5781bc2d"],"l":"lockfile: bytemuck dep for bun_paths","sub":"unsafe-5k"},{"s":"5781bc2d","b":"agent-main","t":1778573526,"m":false,"p":["c02b895b"],"l":"unsafe -4: cell-get + ffi-safe-fn in jsc (Cell<boo"},{"s":"12153689","b":"agent-main","t":1778573324,"m":true,"p":["9cf64451","3f6bf8c3"],"l":"Merge remote-tracking branch 'origin/claude/bench-"},{"s":"3f6bf8c3","b":"bench-fix","t":1778573268,"m":false,"p":["324e65e3"],"l":"perf: ThreadPool \u2014 prewarm mimalloc NUMA cache + s","sub":"bench-until-green"},{"s":"324e65e3","b":"agent-main","t":1778573265,"m":false,"p":["788a49f1"],"l":"perf: ArrayHashMap \u2014 outline non-generic HashTable"},{"s":"9cf64451","b":"agent-main","t":1778572452,"m":true,"p":["1d10c6e6","036413e1"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"036413e1","b":"claude-sub","t":1778572422,"m":false,"p":["f93fc826"],"l":"unsafe -4: ffi-safe-fn in io","sub":"unsafe-5k"},{"s":"0de825a6","b":"agent-main","t":1778572409,"m":false,"p":["2642d462"],"l":"unsafe -3: nonnull-asref in http"},{"s":"1d10c6e6","b":"agent-main","t":1778571962,"m":false,"p":["d28b23c7"],"l":"dispatch_js2native: bun_core_string_immutable_unic"},{"s":"d28b23c7","b":"agent-main","t":1778571789,"m":true,"p":["a5c25ff2","177f671a"],"l":"Merge branch 'claude/merge-bun-string-into-core' i"},{"s":"177f671a","b":"claude-sub","t":1778571745,"m":false,"p":["f35c77ef"],"l":"merge bun_string into bun_core; top-level re-expor","sub":"merge-bun-string-into-core"},{"s":"a5c25ff2","b":"agent-main","t":1778571299,"m":true,"p":["90546ec8","049aaeb7"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"049aaeb7","b":"claude-sub","t":1778571284,"m":false,"p":["0390f932"],"l":"unsafe -4: nonnull-asref/slice-raw-parts in spawn+","sub":"unsafe-5k"},{"s":"4e59a954","b":"agent-main","t":1778571272,"m":false,"p":["36f3bda7"],"l":"unsafe -3: backref-deref/nonnull-asref in http"},{"s":"90546ec8","b":"agent-main","t":1778570245,"m":true,"p":["7c83a279","385573b8"],"l":"Merge remote-tracking branch 'origin/claude/bench-"},{"s":"7c83a279","b":"agent-main","t":1778569960,"m":false,"p":["ba8ee2af"],"l":"scripts/ci-monitor-check.ts: poll latest branch bu"},{"s":"ba8ee2af","b":"agent-main","t":1778569754,"m":true,"p":["fd6e64c3","2a44d199"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"2a44d199","b":"claude-sub","t":1778569744,"m":false,"p":["c1124b12"],"l":"unsafe -2: unsafe-fn-narrow in ast","sub":"unsafe-5k"},{"s":"608c8b24","b":"agent-main","t":1778569732,"m":false,"p":["f35c77ef"],"l":"unsafe -5: ffi-safe-fn/transmute-cast/unsafe-fn-na"},{"s":"fd6e64c3","b":"agent-main","t":1778569693,"m":true,"p":["2cb84027","ca35894d"],"l":"Merge remote-tracking branch 'origin/claude/bun-sy"},{"s":"2cb84027","b":"agent-main","t":1778569598,"m":false,"p":["094f0e74"],"l":"ci #53617: napi_body JSBuffer__bufferFromLength cl"},{"s":"f35c77ef","b":"agent-main","t":1778568943,"m":true,"p":["18fa1424","ff289b82"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"ff289b82","b":"claude-sub","t":1778568924,"m":false,"p":["56614b79"],"l":"unsafe -5: transmute-cast in install (bytemuck cas","sub":"unsafe-5k"},{"s":"ca35894d","b":"claude-sub","t":1778568607,"m":false,"p":["309da429"],"l":"refactor: watcher raw Fd open \u2192 bun_sys::File (-2 ","sub":"bun-sys-file-refactor"},{"s":"309da429","b":"agent-main","t":1778568607,"m":false,"p":["45df53b3"],"l":"refactor: crash_handler raw Fd open/read \u2192 bun_sys"},{"s":"0d02ebcf","b":"agent-main","t":1778568591,"m":false,"p":["d4f71037"],"l":"bun_sys::File: complete File.zig port + extract Fi"},{"s":"18fa1424","b":"agent-main","t":1778568580,"m":false,"p":["cb557494"],"l":"UTF-8 validation: simdutf not core::str::from_utf8"},{"s":"cb557494","b":"agent-main","t":1778568197,"m":true,"p":["0ee85994","fe26c942"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"0ee85994","b":"agent-main","t":1778568196,"m":false,"p":["e04be779"],"l":"fmt::s helper: byte-slice display via is_ascii fas"},{"s":"fe26c942","b":"claude-sub","t":1778568116,"m":false,"p":["b55e7279"],"l":"lockfile: bytemuck dep for bun_shim_impl","sub":"unsafe-5k"},{"s":"500b77e9","b":"agent-main","t":1778568104,"m":false,"p":["2d87ae20"],"l":"unsafe -2: ffi-safe-fn in runtime/socket (sk_X509_"},{"s":"012d10b9","b":"agent-main","t":1778568104,"m":false,"p":["d4f71037"],"l":"unsafe -4: nonnull-asref in runtime/api (TerminalC"},{"s":"385573b8","b":"bench-fix","t":1778567791,"m":false,"p":["50206e71"],"l":"perf: startup.order keep --warn-symbol-ordering on","sub":"bench-until-green"},{"s":"71c60f38","b":"agent-main","t":1778567790,"m":false,"p":["4f1b9906"],"l":"perf: Package parse_with_json dyn-erase ResolverCo"},{"s":"d4f71037","b":"agent-main","t":1778567101,"m":true,"p":["0ca9f24b","beea94d5"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"beea94d5","b":"claude-sub","t":1778567050,"m":false,"p":["fdb63d5b"],"l":"unsafe -4: slice-raw-parts in install","sub":"unsafe-5k"},{"s":"c485e367","b":"agent-main","t":1778567049,"m":false,"p":["d6a96ea5"],"l":"unsafe -6: nonnull-asref in runtime/server+webcore"},{"s":"10718d16","b":"agent-main","t":1778567049,"m":false,"p":["9ef53164"],"l":"unsafe -12: backref-deref/nonnull-asref in runtime"},{"s":"0ca9f24b","b":"agent-main","t":1778566464,"m":false,"p":["d030164e"],"l":"rust.ts startup-order: rustNm = sibling of rust-ll"},{"s":"d030164e","b":"agent-main","t":1778566464,"m":true,"p":["43f61c2a","e3ef6c3e"],"l":"Merge remote-tracking branch 'origin/claude/code-d"},{"s":"e3ef6c3e","b":"claude-sub","t":1778566175,"m":false,"p":["c0379161"],"l":"dedup: callers/misc \u2014 http, sql, uws_sys, valkey, ","sub":"code-dedup"},{"s":"a3e3bad5","b":"agent-main","t":1778566165,"m":false,"p":["0d71d941"],"l":"dedup: install/ast/shell_parser \u2014 DependencyGroup "},{"s":"e095355f","b":"agent-main","t":1778566152,"m":false,"p":["43683501"],"l":"dedup: string/errno/windows_sys \u2014 bun_string::writ"},{"s":"43f61c2a","b":"agent-main","t":1778565633,"m":true,"p":["e37a3def","8d7da6bf"],"l":"Merge remote-tracking branch 'origin/claude/ci-fix"},{"s":"8d7da6bf","b":"ci-fix","t":1778565625,"m":false,"p":["60d250aa"],"l":"ci #53599: bundler-renamer-uap + install-resolve-u","sub":"ci-fix-53599"},{"s":"e37a3def","b":"agent-main","t":1778565438,"m":false,"p":["5a266046"],"l":"EventLoopHandle::from_tag_ptr: restore unsafe fn ("},{"s":"5a266046","b":"agent-main","t":1778565368,"m":true,"p":["735dd56b","86ccdb4b"],"l":"Merge remote-tracking branch 'origin/claude/unsafe"},{"s":"86ccdb4b","b":"claude-sub","t":1778565360,"m":false,"p":["d88cb9e1"],"l":"unsafe -2: unsafe-fn-narrow in sql_jsc","sub":"unsafe-5k"},{"s":"6e755bdd","b":"agent-main","t":1778565354,"m":false,"p":["c6c52a8d"],"l":"unsafe -12: ffi-safe-fn + unsafe-fn-narrow in jsc"},{"s":"735dd56b","b":"agent-main","t":1778565175,"m":true,"p":["c6c52a8d","80af8ed7"],"l":"Merge remote-tracking branch 'origin/claude/bench-"},{"s":"80af8ed7","b":"bench-fix","t":1778565128,"m":false,"p":["b70e7ebe"],"l":"build: prefer rustc-bundled llvm-nm for startup.or","sub":"bench-until-green"},{"s":"c6c52a8d","b":"agent-main","t":1778564714,"m":false,"p":["00468d23"],"l":"unsafe -2: ffi-safe-fn in string+bun_core"},{"s":"9bb67415","b":"agent-main","t":1778564096,"m":false,"p":["e69e1cce"],"l":"unsafe -1: slice-raw-parts in watcher"},{"s":"98f8bf60","b":"agent-main","t":1778564085,"m":false,"p":["a81d8c10"],"l":"unsafe -3: nonnull-asref in runtime/api"},{"s":"2ec32a2f","b":"agent-main","t":1778563661,"m":false,"p":["b49e6b0c"],"l":"perf: pretty/prettyln #[inline(always)] \u2014 startup "},{"s":"ad3aeddd","b":"agent-main","t":1778563655,"m":false,"p":["2fe0931d"],"l":"perf: highway wrappers #[inline(always)] \u2014 lexer/p"},{"s":"06602213","b":"agent-main","t":1778563655,"m":false,"p":["59418422"],"l":"perf: to_utf16_alloc skip zero-fill \u2014 build/create"},{"s":"0ccbb8dc","b":"agent-main","t":1778563654,"m":false,"p":["3b5bd700"],"l":"perf: bss_heap_reserve coalesced mmap arena \u2014 star"},{"s":"39c31ef4","b":"agent-main","t":1778563167,"m":false,"p":["e133989f"],"l":"unsafe -8: backref-deref (StoreRef<Scope>) in js_p"}],"window":{"start":"2026-05-12T00:00:00Z","end":"2026-05-12T06:00:00Z","label":"May 12 \u2014 peak topology window (ci-fix + unsafe-5k + bench-fix + refactor branches all active)"}}</script>
+  <script>
+  (function () {
+    'use strict';
+
+    // -------- 1. Load embedded data --------
+    var dataEl = document.getElementById('viz-data');
+    if (!dataEl) { console.error('[viz] missing #viz-data'); return; }
+    var DATA;
+    try { DATA = JSON.parse(dataEl.textContent); }
+    catch (err) { console.error('[viz] bad JSON in #viz-data', err); return; }
+
+    if (!DATA || !Array.isArray(DATA.branches) || !Array.isArray(DATA.commits)) {
+      console.error('[viz] DATA missing branches[] or commits[]'); return;
+    }
+    if (typeof d3 === 'undefined' || !d3.select) {
+      console.error('[viz] d3 not loaded'); return;
+    }
+
+    // -------- 2. Constants & layout --------
+    var VB_W = 1100;            // viewBox width (responsive scaling)
+    var VB_H = 420;             // viewBox height (spec)
+    var M = { top: 30, right: 20, bottom: 50, left: 200 };
+    var LANE_COUNT = DATA.branches.length;             // 5
+    var laneAreaH = VB_H - M.top - M.bottom;           // 340
+    var laneH = laneAreaH / LANE_COUNT;                // 68
+    var R_NODE = 5;
+    var R_MERGE = 7;
+    var STAGGER_MS = 120;
+    var STACK_OFFSET = 8;       // px per overlap step on lane 0 collisions
+
+    // -------- 3. Indexes --------
+    var branchById = {};
+    DATA.branches.forEach(function (b) { branchById[b.id] = b; });
+
+    var commitsSorted = DATA.commits.slice().sort(function (a, b) { return a.t - b.t; });
+    var commitBySha = new Map();
+    commitsSorted.forEach(function (c) { commitBySha.set(c.s, c); });
+
+    // -------- 4. Time scale --------
+    var tMin = d3.min(commitsSorted, function (c) { return c.t; });
+    var tMax = d3.max(commitsSorted, function (c) { return c.t; });
+    if (tMin === tMax) { tMax = tMin + 1; } // degenerate guard
+    var x = d3.scaleLinear().domain([tMin, tMax]).range([M.left, VB_W - M.right]);
+
+    // Lane Y center: index 0 (agent-main) at top
+    function laneY(laneIdx) { return M.top + laneIdx * laneH + laneH / 2; }
+
+    // -------- 5. Stacking on agent-main (lane 0) --------
+    // Spec: when same-second collisions on agent-main, spread y ±STACK_OFFSET per overlap.
+    var stackOffsetBySha = new Map();
+    var lane0Groups = d3.group(
+      commitsSorted.filter(function (c) {
+        var b = branchById[c.b];
+        return b && b.lane === 0;
+      }),
+      function (c) { return c.t; }
+    );
+    lane0Groups.forEach(function (group) {
+      if (group.length === 1) {
+        stackOffsetBySha.set(group[0].s, 0);
+        return;
+      }
+      // Center the stack around lane center: positions = -k..+k
+      var n = group.length;
+      var mid = (n - 1) / 2;
+      // Stable order within same ts: by sha8 ascending, so reload draws same layout
+      group.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : 0; });
+      group.forEach(function (c, i) {
+        stackOffsetBySha.set(c.s, (i - mid) * STACK_OFFSET);
+      });
+    });
+
+    function commitY(c) {
+      var b = branchById[c.b];
+      if (!b) { return laneY(0); }
+      var base = laneY(b.lane);
+      if (b.lane === 0) {
+        var off = stackOffsetBySha.get(c.s);
+        if (typeof off === 'number') { return base + off; }
+      }
+      return base;
+    }
+
+    // -------- 6. Merge edges --------
+    // For each merge commit, edges from each non-first parent's commit node to the merge node.
+    var edges = [];
+    commitsSorted.forEach(function (c) {
+      if (!c.m || !Array.isArray(c.p) || c.p.length < 2) { return; }
+      for (var i = 1; i < c.p.length; i++) {
+        var parentSha = c.p[i];
+        var parent = commitBySha.get(parentSha);
+        if (!parent) { continue; } // parent outside the 101-commit window — skip silently
+        edges.push({ from: parent, to: c });
+      }
+    });
+
+    // -------- 7. SVG scaffold --------
+    var svg = d3.select('#viz-svg');
+    svg.selectAll('*').remove(); // idempotent
+
+    // Lane backgrounds + separators + labels
+    var laneG = svg.append('g').attr('class', 'lanes');
+    DATA.branches.forEach(function (b) {
+      var yTop = M.top + b.lane * laneH;
+      var yCenter = yTop + laneH / 2;
+
+      // Separator line between lanes (skip top of lane 0)
+      if (b.lane > 0) {
+        laneG.append('line')
+          .attr('x1', M.left).attr('x2', VB_W - M.right)
+          .attr('y1', yTop).attr('y2', yTop)
+          .attr('stroke', '#E2E8F0').attr('stroke-width', 1);
+      }
+
+      // Lane label (left margin)
+      var labelG = laneG.append('g').attr('transform', 'translate(' + (M.left - 12) + ',' + yCenter + ')');
+      labelG.append('circle')
+        .attr('cx', -10).attr('cy', 0).attr('r', 5)
+        .attr('fill', b.color);
+      labelG.append('text')
+        .attr('x', -22).attr('y', 0)
+        .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
+        .attr('font-size', 11).attr('font-weight', 600).attr('fill', '#0F172A')
+        .text(b.label.length > 32 ? b.label.slice(0, 30) + '…' : b.label)
+        .append('title').text(b.label);
+    });
+
+    // Bottom separator
+    laneG.append('line')
+      .attr('x1', M.left).attr('x2', VB_W - M.right)
+      .attr('y1', M.top + laneAreaH).attr('y2', M.top + laneAreaH)
+      .attr('stroke', '#E2E8F0').attr('stroke-width', 1);
+
+    // -------- 8. X axis (30-min ticks, HH:mm UTC) --------
+    var THIRTY_MIN = 30 * 60;
+    var firstTick = Math.ceil(tMin / THIRTY_MIN) * THIRTY_MIN;
+    var tickValues = [];
+    for (var t = firstTick; t <= tMax; t += THIRTY_MIN) { tickValues.push(t); }
+
+    function fmtUTC(ts) {
+      var d = new Date(ts * 1000);
+      var hh = String(d.getUTCHours()).padStart(2, '0');
+      var mm = String(d.getUTCMinutes()).padStart(2, '0');
+      return hh + ':' + mm + ' UTC';
+    }
+    function fmtUTCSec(ts) {
+      var d = new Date(ts * 1000);
+      var hh = String(d.getUTCHours()).padStart(2, '0');
+      var mm = String(d.getUTCMinutes()).padStart(2, '0');
+      var ss = String(d.getUTCSeconds()).padStart(2, '0');
+      return hh + ':' + mm + ':' + ss;
+    }
+
+    var axisG = svg.append('g').attr('class', 'x-axis')
+      .attr('transform', 'translate(0,' + (M.top + laneAreaH) + ')');
+    axisG.append('line')
+      .attr('x1', M.left).attr('x2', VB_W - M.right)
+      .attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#94A3B8').attr('stroke-width', 1);
+    tickValues.forEach(function (tv) {
+      var xv = x(tv);
+      axisG.append('line')
+        .attr('x1', xv).attr('x2', xv).attr('y1', 0).attr('y2', 6)
+        .attr('stroke', '#94A3B8').attr('stroke-width', 1);
+      axisG.append('text')
+        .attr('x', xv).attr('y', 22)
+        .attr('text-anchor', 'middle').attr('font-size', 10).attr('fill', '#475569')
+        .text(fmtUTC(tv));
+    });
+
+    // -------- 9. Edges (BEFORE nodes) --------
+    var edgesG = svg.append('g').attr('class', 'edges').attr('fill', 'none');
+
+    function edgePath(e) {
+      var x0 = x(e.from.t), y0 = commitY(e.from);
+      var x1 = x(e.to.t),   y1 = commitY(e.to);
+      var midX = (x0 + x1) / 2;
+      // Cubic bezier: control points at midX, source y and midX, target y (per spec)
+      return 'M' + x0 + ',' + y0 +
+             ' C' + midX + ',' + y0 +
+             ' '  + midX + ',' + y1 +
+             ' '  + x1   + ',' + y1;
+    }
+
+    var edgeSel = edgesG.selectAll('path.edge').data(edges).enter().append('path')
+      .attr('class', 'edge')
+      .attr('d', edgePath)
+      .attr('stroke', function (e) {
+        var srcBranch = branchById[e.from.b];
+        return srcBranch ? srcBranch.color : '#94A3B8';
+      })
+      .attr('stroke-width', 1.5)
+      .attr('opacity', 0)
+      .attr('fill', 'none')
+      .each(function () {
+        var len = this.getTotalLength();
+        d3.select(this)
+          .attr('stroke-dasharray', len)
+          .attr('stroke-dashoffset', len);
+      });
+
+    // -------- 10. Nodes --------
+    var nodesG = svg.append('g').attr('class', 'nodes');
+    var nodeSel = nodesG.selectAll('g.node').data(commitsSorted, function (c) { return c.s; })
+      .enter().append('g')
+      .attr('class', 'node')
+      .attr('transform', function (c) { return 'translate(' + x(c.t) + ',' + commitY(c) + ')'; })
+      .attr('opacity', 0)
+      .style('cursor', 'pointer');
+
+    nodeSel.each(function (c) {
+      var g = d3.select(this);
+      var b = branchById[c.b];
+      var col = b ? b.color : '#64748B';
+      if (c.m) {
+        // Merge: outer colored ring, white fill inside
+        g.append('circle').attr('r', 0).attr('class', 'r-anim')
+          .attr('fill', '#FFFFFF')
+          .attr('stroke', col).attr('stroke-width', 2.25)
+          .attr('data-final-r', R_MERGE);
+        g.append('circle').attr('r', 0).attr('class', 'r-anim r-inner')
+          .attr('fill', col)
+          .attr('data-final-r', 2.5);
+      } else {
+        g.append('circle').attr('r', 0).attr('class', 'r-anim')
+          .attr('fill', col)
+          .attr('stroke', '#FFFFFF').attr('stroke-width', 0.75)
+          .attr('data-final-r', R_NODE);
+      }
+    });
+
+    // -------- 11. Tooltip --------
+    var tip = document.getElementById('viz-tip');
+    var wrap = document.getElementById('viz-wrap');
+
+    function showTip(c, evt) {
+      var b = branchById[c.b];
+      var label = b ? b.label : c.b;
+      var sub = c.sub ? ' <span style="color:#A5B4FC">(' + escapeHtml(c.sub) + ')</span>' : '';
+      tip.innerHTML =
+        '<div style="font-family:ui-monospace,Menlo,Consolas,monospace;color:#FCD34D;font-weight:700">' +
+          escapeHtml(c.s) +
+        '</div>' +
+        '<div style="margin-top:2px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' +
+          (b ? b.color : '#64748B') + ';margin-right:6px"></span>' +
+          escapeHtml(label) + sub +
+        '</div>' +
+        '<div style="color:#CBD5E1;margin-top:2px">' + fmtUTCSec(c.t) + ' UTC' +
+          (c.m ? '  ·  <span style="color:#FCA5A5">merge</span>' : '') +
+        '</div>' +
+        '<div style="color:#E2E8F0;margin-top:4px">' + escapeHtml(c.l || '') + '</div>';
+
+      // Position relative to wrapper
+      var wrect = wrap.getBoundingClientRect();
+      var px = evt.clientX - wrect.left + 14;
+      var py = evt.clientY - wrect.top + 14;
+
+      tip.style.opacity = '1';
+      tip.style.left = '0px';
+      tip.style.top = '0px';
+      tip.style.transform = 'translate(' + px + 'px,' + py + 'px)';
+
+      // Re-measure and clamp to viewport
+      var trect = tip.getBoundingClientRect();
+      var maxX = wrect.width - trect.width - 4;
+      var maxY = wrect.height - trect.height - 4;
+      if (px > maxX) px = Math.max(4, maxX);
+      if (py > maxY) py = Math.max(4, maxY);
+      tip.style.transform = 'translate(' + px + 'px,' + py + 'px)';
+    }
+    function hideTip() { tip.style.opacity = '0'; }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    nodeSel
+      .on('mousemove', function (evt, c) { showTip(c, evt); })
+      .on('mouseleave', hideTip);
+
+    // -------- 12. Animation engine --------
+    var status = document.getElementById('viz-status');
+    var playBtn = document.getElementById('viz-play');
+    var playIcon = document.getElementById('viz-play-icon');
+    var playLabel = document.getElementById('viz-play-label');
+    var resetBtn = document.getElementById('viz-reset');
+
+    var visibleSha = new Set();           // commits currently fully visible
+    var pendingTimers = [];               // setTimeout handles for fade-ins
+    var playing = false;
+    var startedAt = 0;                    // ms timestamp of the run start
+    var completed = false;
+
+    function clearTimers() {
+      pendingTimers.forEach(function (id) { clearTimeout(id); });
+      pendingTimers = [];
+    }
+
+    function setNodeVisible(c, instant) {
+      visibleSha.add(c.s);
+      var node = nodeSel.filter(function (d) { return d.s === c.s; });
+      if (node.empty()) { return; }
+      node.transition().duration(instant ? 0 : 320).attr('opacity', 1);
+      node.selectAll('circle.r-anim').each(function () {
+        var sel = d3.select(this);
+        var finalR = +sel.attr('data-final-r');
+        sel.transition().duration(instant ? 0 : 320).attr('r', finalR);
+      });
+    }
+
+    function tryRevealEdgesFor(c) {
+      // Reveal any edge whose endpoints are both visible.
+      edgeSel.filter(function (e) {
+        return (e.from.s === c.s || e.to.s === c.s) &&
+               visibleSha.has(e.from.s) && visibleSha.has(e.to.s);
+      }).each(function () {
+        var sel = d3.select(this);
+        if (+sel.attr('opacity') >= 0.6) { return; } // already revealed
+        var len = this.getTotalLength();
+        sel.attr('stroke-dashoffset', len)
+           .attr('opacity', 0.6)
+           .transition().duration(420).ease(d3.easeCubicOut)
+           .attr('stroke-dashoffset', 0);
+      });
+    }
+
+    function resetAll() {
+      clearTimers();
+      visibleSha.clear();
+      completed = false;
+      playing = false;
+      nodeSel.attr('opacity', 0);
+      nodeSel.selectAll('circle.r-anim').attr('r', 0);
+      edgeSel.attr('opacity', 0).each(function () {
+        var len = this.getTotalLength();
+        d3.select(this).attr('stroke-dasharray', len).attr('stroke-dashoffset', len);
+      });
+      setPlayButton(false);
+      status.textContent = '';
+    }
+
+    function setPlayButton(isPlaying) {
+      if (isPlaying) {
+        playIcon.innerHTML = '&#10074;&#10074;'; // pause bars
+        playLabel.textContent = 'Pause';
+      } else {
+        playIcon.innerHTML = completed ? '&#9654;' : '&#9654;';
+        playLabel.textContent = completed ? 'Replay' : 'Play';
+      }
+    }
+
+    function pause() {
+      // Soft pause: stop scheduling more fade-ins. Already-shown commits stay visible.
+      clearTimers();
+      playing = false;
+      setPlayButton(false);
+      status.textContent = visibleSha.size + ' / ' + commitsSorted.length + ' commits shown';
+    }
+
+    function play() {
+      if (playing) { return; }
+      // Replay from start if completed or if user previously reset
+      if (completed || visibleSha.size === 0) {
+        resetAll();
+      }
+      playing = true;
+      completed = false;
+      setPlayButton(true);
+      startedAt = performance.now();
+
+      var alreadyShown = visibleSha.size; // 0 in normal start; supports resume after pause
+      commitsSorted.forEach(function (c, i) {
+        if (i < alreadyShown) { return; }
+        var delay = (i - alreadyShown) * STAGGER_MS;
+        var tid = setTimeout(function () {
+          setNodeVisible(c, false);
+          tryRevealEdgesFor(c);
+          status.textContent = visibleSha.size + ' / ' + commitsSorted.length + ' commits shown';
+          if (visibleSha.size === commitsSorted.length) {
+            playing = false;
+            completed = true;
+            setPlayButton(false);
+          }
+        }, delay);
+        pendingTimers.push(tid);
+      });
+    }
+
+    playBtn.addEventListener('click', function () {
+      if (playing) { pause(); } else { play(); }
+    });
+    resetBtn.addEventListener('click', function () {
+      resetAll();
+    });
+
+    // -------- 13. Initial state: everything hidden, nothing playing --------
+    resetAll();
+    status.textContent = commitsSorted.length + ' commits  ·  ' + edges.length + ' merge edges  ·  press Play';
+
+  })();
+  </script>
 </section>
 
 <!-- ============ ENGINEERING PLAN ============ -->
