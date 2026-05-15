@@ -279,7 +279,7 @@
       6,755 commits &middot; 276 merges &middot; 10 days
     </p>
 
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 overflow-hidden">
+    <div class="rounded-2xl border border-slate-200 bg-white p-4">
       <!-- controls -->
       <div class="flex items-center gap-3 mb-3 flex-wrap">
         <button id="viz-play" style="background:#0F172A;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">&#9654; Play</button>
@@ -288,10 +288,12 @@
       </div>
       <!-- legend -->
       <div id="viz-legend" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:10px;font-size:11px;color:#475569;"></div>
-      <!-- canvas wrapper -->
-      <div style="position:relative;width:100%;">
-        <canvas id="viz-canvas" style="width:100%;display:block;"></canvas>
-        <div id="viz-tooltip" style="display:none;position:fixed;background:#0F172A;color:#fff;font-size:11px;font-family:ui-monospace,monospace;padding:7px 10px;border-radius:7px;pointer-events:none;z-index:999;max-width:300px;line-height:1.6;"></div>
+      <!-- canvas wrapper — horizontally scrollable so labels always show -->
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+        <div style="position:relative;min-width:860px;">
+          <canvas id="viz-canvas" style="width:100%;display:block;"></canvas>
+          <div id="viz-tooltip" style="display:none;position:fixed;background:#0F172A;color:#fff;font-size:11px;font-family:ui-monospace,monospace;padding:7px 10px;border-radius:7px;pointer-events:none;z-index:999;max-width:300px;line-height:1.6;"></div>
+        </div>
       </div>
     </div>
 
@@ -348,7 +350,7 @@
     var legend = document.getElementById('viz-legend');
 
     var DPR = window.devicePixelRatio || 1;
-    var ML = 175, MR = 70, MT = 28, MB = 52;
+    var ML = 195, MR = 70, MT = 28, MB = 52;
     var CANVAS_H = 520;
     var N_LANES = 8;
     var animating = false, rafId = null;
@@ -398,7 +400,7 @@
     function laneColor(id){ var b=BRANCHES.find(function(x){return x.id===id;}); return b?b.color:'#64748b'; }
     function laneIdx(id){   var b=BRANCHES.find(function(x){return x.id===id;}); return b?b.lane:0; }
 
-    function getW(){ return canvas.parentElement.clientWidth; }
+    function getW(){ return Math.max(canvas.parentElement.clientWidth, 860); }
     function laneH(){ return (CANVAS_H - MT - MB) / N_LANES; }
     function laneY(lane){ return MT + lane * laneH() + laneH()/2; }
     function tsToX(ts, w){ return ML + ((ts - minTs)/(maxTs - minTs)) * (w - ML - MR); }
