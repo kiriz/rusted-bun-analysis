@@ -240,9 +240,9 @@
       <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
       <a href="#appendix" class="hover:text-white transition">Appendix</a>
     </div>
-    <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
+    <a href="https://github.com/kiriz/rusted-bun-analysis" target="_blank" rel="noopener"
        class="text-xs font-semibold bg-ai hover:bg-ai/80 transition text-white px-3 py-1.5 rounded-md">
-      View PR&nbsp;&rarr;
+      Our Repo&nbsp;&rarr;
     </a>
   </div>
 </nav>
@@ -276,29 +276,60 @@
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Branch Topology</h2>
     <p class="text-lg text-slate-600 mb-6 max-w-2xl">
-      All 6,755 commits across 10 days &mdash; agent main branch, claude/* sub-branches, CI fix bots, and Jarred&rsquo;s direct commits. Hit Play.
+      All 6,755 commits across 10 days. Each dot is a commit; ringed dots are merges. Hit Play to watch the agent work.
     </p>
 
     <div class="rounded-2xl border border-slate-200 bg-white p-4 overflow-hidden">
       <!-- controls -->
-      <div class="flex items-center gap-3 mb-3">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
         <button id="viz-play" style="background:#0F172A;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">&#9654; Play</button>
         <button id="viz-reset" style="background:#334155;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">&#8635;</button>
         <span id="viz-status" style="font-size:12px;color:#64748b;font-family:ui-monospace,monospace;">loading&hellip;</span>
       </div>
       <!-- legend -->
-      <div id="viz-legend" style="display:flex;flex-wrap:wrap;gap:10px 20px;margin-bottom:10px;font-size:11px;color:#475569;"></div>
-      <!-- canvas -->
+      <div id="viz-legend" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:10px;font-size:11px;color:#475569;"></div>
+      <!-- canvas wrapper -->
       <div style="position:relative;width:100%;">
         <canvas id="viz-canvas" style="width:100%;display:block;"></canvas>
-        <div id="viz-tooltip" style="display:none;position:fixed;background:#0F172A;color:#fff;font-size:11px;font-family:ui-monospace,monospace;padding:7px 10px;border-radius:7px;pointer-events:none;z-index:999;max-width:280px;line-height:1.5;"></div>
+        <div id="viz-tooltip" style="display:none;position:fixed;background:#0F172A;color:#fff;font-size:11px;font-family:ui-monospace,monospace;padding:7px 10px;border-radius:7px;pointer-events:none;z-index:999;max-width:300px;line-height:1.6;"></div>
+      </div>
+    </div>
+
+    <!-- explanation block -->
+    <div class="mt-10 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+      <h3 class="text-xl font-black tracking-tight mb-5">How this was orchestrated</h3>
+      <div class="grid sm:grid-cols-2 gap-6 text-sm text-slate-700 leading-relaxed">
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Agent main lane <span class="text-ai">(purple)</span></div>
+          <p>Claude Code writes Rust continuously on <span class="mono text-xs">claude/phase-a-port</span> — one commit every ~9 seconds, no compilation, just write and record. 6,573 commits, all timestamped UTC.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Sub-branches <span class="text-blue-600">(blue)</span></div>
+          <p>When a specific task needs isolation — unsafe-block reduction (×27), code dedup, string refactors — the agent opens a <span class="mono text-xs">claude/*</span> branch, does the work, and merges back. Ringed dots show where merges land on main.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Bench-until-green <span class="text-caution">(amber)</span></div>
+          <p>A dedicated benchmark-repair branch that runs until benchmarks pass. Spawned 19 times — each time CI flagged a regression, a new instance launched, fixed it, and merged back.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; CI auto-fix bot <span class="text-concern">(red)</span></div>
+          <p><span class="mono text-xs">autofix.ci</span> bot responds to CI failures by opening a numbered branch (<span class="mono text-xs">ci-auto-fix-53599</span>, etc.), patching the failure, and merging. 42 automated fix commits — the outer verification loop in action.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9679; Jarred <span class="text-verified">(green)</span></div>
+          <p>88 commits from Jarred Sumner's Mac (timezone <span class="mono text-xs">-0700</span>) — architectural decisions, CMake build wiring, test pins, and the final merge to <span class="mono text-xs">main</span>. Every green dot is a human intervention.</p>
+        </div>
+        <div>
+          <div class="font-bold text-ink mb-1">&#9711; Ringed dots = merges</div>
+          <p>276 merge commits total. When a sub-branch completes, it merges INTO <span class="mono text-xs">claude/phase-a-port</span>. The curved arrows show that direction — sub-branch tip flowing down into the agent main lane.</p>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
   (function() {
-    var BRANCHES, COMMITS;
+    var BRANCHES, COMMITS, MERGE_EDGES;
     var canvas = document.getElementById('viz-canvas');
     var ctx = canvas.getContext('2d');
     var playBtn = document.getElementById('viz-play');
@@ -308,221 +339,243 @@
     var legend = document.getElementById('viz-legend');
 
     var DPR = window.devicePixelRatio || 1;
-    var ML = 170, MR = 20, MT = 28, MB = 52;
-    var CANVAS_H = 380;
+    var ML = 175, MR = 70, MT = 28, MB = 52;
+    var CANVAS_H = 400;
+    var N_LANES = 5;
     var animating = false, rafId = null;
     var revealTs = 0, minTs = 0, maxTs = 0;
-    var positions = []; // {x, y, commit} after layout
+    var positions = [];    // {x, y, c} for all commits
+    var shaMap = {};       // sha8 → position index
+    var laneCounts = [];   // current visible count per lane
+    var SPEED_RATIO = 1/700;
 
     fetch('commits.json')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
+      .then(function(r){ return r.json(); })
+      .then(function(data){
         BRANCHES = data.branches;
-        COMMITS = data.commits.sort(function(a,b){return a.t-b.t;});
+        COMMITS  = data.commits.sort(function(a,b){return a.t-b.t;});
         minTs = COMMITS[0].t;
         maxTs = COMMITS[COMMITS.length-1].t;
         revealTs = minTs - 1;
 
+        // build merge edges: for each merge commit, each parent after the first
+        // is a sub-branch tip flowing INTO this commit
+        MERGE_EDGES = [];
+        COMMITS.forEach(function(c, i){
+          if (c.m && c.p && c.p.length > 1) {
+            for (var k = 1; k < c.p.length; k++) {
+              MERGE_EDGES.push({ from: c.p[k], to: c.s, toIdx: i });
+            }
+          }
+        });
+
         buildLegend();
         resizeCanvas();
         drawFrame();
-        statusEl.textContent = '0 / ' + COMMITS.length + ' commits — press Play';
+        statusEl.textContent = '0 / ' + COMMITS.length.toLocaleString() + ' — press Play';
       })
-      .catch(function(e) { statusEl.textContent = 'Error loading commits.json: ' + e.message; });
+      .catch(function(e){ statusEl.textContent = 'Error: ' + e.message; });
 
-    function buildLegend() {
+    function buildLegend(){
       legend.innerHTML = '';
-      BRANCHES.forEach(function(b) {
+      BRANCHES.forEach(function(b){
         var el = document.createElement('span');
-        el.style.display = 'flex';
-        el.style.alignItems = 'center';
-        el.style.gap = '5px';
-        el.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:' + b.color + ';display:inline-block;"></span>' + b.label;
+        el.style.cssText = 'display:flex;align-items:center;gap:5px;';
+        el.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:'+b.color+';flex-shrink:0;display:inline-block;"></span>' + b.label;
         legend.appendChild(el);
       });
     }
 
-    function laneColor(branchId) {
-      var b = BRANCHES.find(function(x){return x.id===branchId;});
-      return b ? b.color : '#64748b';
-    }
-    function laneIndex(branchId) {
-      var b = BRANCHES.find(function(x){return x.id===branchId;});
-      return b ? b.lane : 0;
-    }
+    function laneColor(id){ var b=BRANCHES.find(function(x){return x.id===id;}); return b?b.color:'#64748b'; }
+    function laneIdx(id){   var b=BRANCHES.find(function(x){return x.id===id;}); return b?b.lane:0; }
 
-    function resizeCanvas() {
-      var w = canvas.parentElement.clientWidth;
-      canvas.width = w * DPR;
+    function getW(){ return canvas.parentElement.clientWidth; }
+    function laneH(){ return (CANVAS_H - MT - MB) / N_LANES; }
+    function laneY(lane){ return MT + lane * laneH() + laneH()/2; }
+    function tsToX(ts, w){ return ML + ((ts - minTs)/(maxTs - minTs)) * (w - ML - MR); }
+
+    function resizeCanvas(){
+      var w = getW();
+      canvas.width  = w * DPR;
       canvas.height = CANVAS_H * DPR;
       canvas.style.height = CANVAS_H + 'px';
+      ctx.setTransform(1,0,0,1,0,0);
       ctx.scale(DPR, DPR);
       computePositions(w);
     }
 
-    function computePositions(w) {
-      var plotW = w - ML - MR;
-      var laneH = (CANVAS_H - MT - MB) / 5;
-      positions = COMMITS.map(function(c) {
-        var x = ML + ((c.t - minTs) / (maxTs - minTs)) * plotW;
-        var lane = laneIndex(c.b);
-        var y = MT + lane * laneH + laneH / 2;
+    function computePositions(w){
+      shaMap = {};
+      positions = COMMITS.map(function(c, i){
+        var x = tsToX(c.t, w);
+        var y = laneY(laneIdx(c.b));
+        shaMap[c.s] = i;
         return {x:x, y:y, c:c};
       });
     }
 
-    function drawFrame() {
-      var w = canvas.width / DPR;
+    function drawFrame(){
+      var w = getW();
+      var lh = laneH();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      var laneH = (CANVAS_H - MT - MB) / 5;
+      // lane bands (alternating subtle bg)
+      for (var i = 0; i < N_LANES; i++){
+        ctx.fillStyle = i%2===0 ? 'rgba(248,250,252,0.7)' : 'rgba(241,245,249,0.5)';
+        ctx.fillRect(ML, MT + i*lh, w - ML - MR, lh);
+      }
 
-      // horizontal lane separators
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1;
-      for (var i = 0; i <= 5; i++) {
-        var ly = MT + i * laneH;
+      // lane separator lines
+      ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+      for (var i = 0; i <= N_LANES; i++){
+        var ly = MT + i*lh;
         ctx.beginPath(); ctx.moveTo(ML, ly); ctx.lineTo(w - MR, ly); ctx.stroke();
       }
 
-      // lane labels
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      BRANCHES.forEach(function(b) {
-        var cy = MT + b.lane * laneH + laneH / 2;
+      // lane labels (left)
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      BRANCHES.forEach(function(b){
+        var cy = laneY(b.lane);
         ctx.fillStyle = b.color;
-        ctx.beginPath(); ctx.arc(ML - 8, cy, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ML-8, cy, 4, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = '#334155';
-        ctx.font = '11px Inter, ui-sans-serif, sans-serif';
-        ctx.fillText(b.label, ML - 16, cy);
+        ctx.font = '11px Inter,ui-sans-serif,sans-serif';
+        ctx.fillText(b.label, ML-16, cy);
       });
 
       // x-axis
-      var axisY = MT + (CANVAS_H - MT - MB);
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(ML, axisY); ctx.lineTo(w - MR, axisY); ctx.stroke();
-
-      // x-axis ticks (every 24h)
-      var DAY = 86400;
-      var firstTick = Math.ceil(minTs / DAY) * DAY;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '10px Inter, ui-sans-serif, sans-serif';
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      for (var ts = firstTick; ts <= maxTs; ts += DAY) {
-        var tx = ML + ((ts - minTs) / (maxTs - minTs)) * (w - ML - MR);
-        ctx.beginPath(); ctx.moveTo(tx, axisY); ctx.lineTo(tx, axisY + 4); ctx.stroke();
-        var d = new Date(ts * 1000);
-        var label = 'May ' + d.getUTCDate();
-        ctx.fillText(label, tx, axisY + 6);
+      var axisY = MT + N_LANES*lh;
+      ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(ML, axisY); ctx.lineTo(w-MR, axisY); ctx.stroke();
+      var DAY=86400, firstTick=Math.ceil(minTs/DAY)*DAY;
+      ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillStyle='#94a3b8';
+      ctx.font='10px Inter,ui-sans-serif,sans-serif'; ctx.strokeStyle='#cbd5e1';
+      for (var ts=firstTick; ts<=maxTs; ts+=DAY){
+        var tx=tsToX(ts,w);
+        ctx.beginPath(); ctx.moveTo(tx,axisY); ctx.lineTo(tx,axisY+4); ctx.stroke();
+        var d=new Date(ts*1000);
+        ctx.fillText('May '+d.getUTCDate(), tx, axisY+6);
       }
 
-      // draw commits up to revealTs — normal first, merge on top
-      var visible = positions.filter(function(p){return p.c.t <= revealTs;});
-      var normal = visible.filter(function(p){return !p.c.m;});
-      var merges = visible.filter(function(p){return p.c.m;});
+      // split visible commits
+      var visible = positions.filter(function(p){return p.c.t<=revealTs;});
+      var normal  = visible.filter(function(p){return !p.c.m;});
+      var merges  = visible.filter(function(p){return p.c.m;});
 
-      normal.forEach(function(p) {
-        ctx.globalAlpha = 0.75;
+      // merge arrows (bezier from sub-branch parent tip → merge commit on main)
+      MERGE_EDGES.forEach(function(e){
+        var toPos = positions[e.toIdx];
+        if (!toPos || toPos.c.t > revealTs) return;
+        var fromIdx = shaMap[e.from];
+        if (fromIdx === undefined) return;
+        var fromPos = positions[fromIdx];
+        if (!fromPos || fromPos.c.t > revealTs) return;
+        // cubic bezier: from sub-branch → to main
+        var x1=fromPos.x, y1=fromPos.y, x2=toPos.x, y2=toPos.y;
+        var cx1=x1+(x2-x1)*0.4, cy1=y1, cx2=x1+(x2-x1)*0.6, cy2=y2;
+        ctx.save();
+        ctx.strokeStyle = laneColor(fromPos.c.b);
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2,3]);
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        ctx.bezierCurveTo(cx1,cy1,cx2,cy2,x2,y2);
+        ctx.stroke();
+        // arrowhead at merge commit
+        ctx.globalAlpha = 0.6;
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1;
+        var ang = Math.atan2(y2-cy2, x2-cx2);
+        ctx.beginPath();
+        ctx.moveTo(x2,y2);
+        ctx.lineTo(x2-6*Math.cos(ang-0.4), y2-6*Math.sin(ang-0.4));
+        ctx.moveTo(x2,y2);
+        ctx.lineTo(x2-6*Math.cos(ang+0.4), y2-6*Math.sin(ang+0.4));
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // normal commits
+      ctx.globalAlpha = 0.75;
+      normal.forEach(function(p){
         ctx.fillStyle = laneColor(p.c.b);
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x,p.y,2,0,Math.PI*2); ctx.fill();
       });
-      merges.forEach(function(p) {
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = laneColor(p.c.b);
-        ctx.lineWidth = 1.5;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      });
+      // merge commits (ringed)
       ctx.globalAlpha = 1;
+      merges.forEach(function(p){
+        ctx.strokeStyle=laneColor(p.c.b); ctx.lineWidth=1.5;
+        ctx.fillStyle='#fff';
+        ctx.beginPath(); ctx.arc(p.x,p.y,3.5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      });
+      ctx.globalAlpha=1;
 
-      var shown = visible.length;
-      if (COMMITS) statusEl.textContent = shown.toLocaleString() + ' / ' + COMMITS.length.toLocaleString() + ' commits';
+      // per-lane counts on the right
+      laneCounts = [0,0,0,0,0];
+      visible.forEach(function(p){ laneCounts[laneIdx(p.c.b)]++; });
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.font='bold 11px ui-monospace,monospace';
+      BRANCHES.forEach(function(b){
+        var cy=laneY(b.lane);
+        var cnt=laneCounts[b.lane];
+        ctx.fillStyle = cnt>0 ? b.color : '#cbd5e1';
+        ctx.fillText(cnt.toLocaleString(), w-MR+6, cy);
+      });
+
+      var shown=visible.length;
+      if(COMMITS) statusEl.textContent = shown.toLocaleString()+' / '+COMMITS.length.toLocaleString()+' commits';
     }
 
-    var SPEED_RATIO = 1 / 700; // full range per 700 frames ~ 11s at 60fps
-    function step() {
-      if (!animating) return;
-      var range = maxTs - minTs;
-      revealTs += range * SPEED_RATIO;
-      if (revealTs >= maxTs) {
-        revealTs = maxTs;
-        drawFrame();
-        animating = false;
-        playBtn.textContent = '↺ Replay';
-        return;
+    function step(){
+      if(!animating) return;
+      revealTs += (maxTs-minTs)*SPEED_RATIO;
+      if(revealTs>=maxTs){
+        revealTs=maxTs; drawFrame(); animating=false; playBtn.textContent='↺ Replay'; return;
       }
       drawFrame();
-      rafId = requestAnimationFrame(step);
+      rafId=requestAnimationFrame(step);
     }
 
-    playBtn.addEventListener('click', function() {
-      if (animating) {
-        animating = false;
-        cancelAnimationFrame(rafId);
-        playBtn.textContent = '▶ Play';
-      } else {
-        if (revealTs >= maxTs) revealTs = minTs - 1;
-        animating = true;
-        playBtn.textContent = '⏸ Pause';
-        rafId = requestAnimationFrame(step);
-      }
+    playBtn.addEventListener('click',function(){
+      if(animating){ animating=false; cancelAnimationFrame(rafId); playBtn.textContent='▶ Play'; }
+      else { if(revealTs>=maxTs) revealTs=minTs-1; animating=true; playBtn.textContent='⏸ Pause'; rafId=requestAnimationFrame(step); }
     });
-
-    resetBtn.addEventListener('click', function() {
-      animating = false;
-      cancelAnimationFrame(rafId);
-      revealTs = minTs - 1;
-      playBtn.textContent = '▶ Play';
-      drawFrame();
+    resetBtn.addEventListener('click',function(){
+      animating=false; cancelAnimationFrame(rafId); revealTs=minTs-1; playBtn.textContent='▶ Play'; drawFrame();
     });
 
     // tooltip
-    canvas.addEventListener('mousemove', function(e) {
-      if (!positions.length) return;
-      var rect = canvas.getBoundingClientRect();
-      var mx = (e.clientX - rect.left);
-      var my = (e.clientY - rect.top);
-      var best = null, bestD = 64;
-      // only scan visible commits
-      for (var i = 0; i < positions.length; i++) {
-        var p = positions[i];
-        if (p.c.t > revealTs) continue;
-        var dx = p.x - mx, dy = p.y - my;
-        var d = dx*dx + dy*dy;
-        if (d < bestD) { bestD = d; best = p; }
+    canvas.addEventListener('mousemove',function(e){
+      if(!positions.length) return;
+      var rect=canvas.getBoundingClientRect();
+      var mx=e.clientX-rect.left, my=e.clientY-rect.top;
+      var best=null, bestD=81;
+      for(var i=0;i<positions.length;i++){
+        var p=positions[i];
+        if(p.c.t>revealTs) continue;
+        var dx=p.x-mx,dy=p.y-my,d=dx*dx+dy*dy;
+        if(d<bestD){bestD=d;best=p;}
       }
-      if (best) {
-        var d = new Date(best.c.t * 1000);
-        var dateStr = 'May ' + String(d.getUTCDate()).padStart(2,'0') + ' ' +
-          String(d.getUTCHours()).padStart(2,'0') + ':' + String(d.getUTCMinutes()).padStart(2,'0') + ' UTC';
-        tooltip.innerHTML = '<b>' + best.c.s + '</b> &middot; ' + dateStr + '<br>' + (best.c.l || '');
-        tooltip.style.display = 'block';
-        tooltip.style.left = (e.clientX + 14) + 'px';
-        tooltip.style.top = (e.clientY - 10) + 'px';
-      } else {
-        tooltip.style.display = 'none';
-      }
+      if(best){
+        var d=new Date(best.c.t*1000);
+        var ds='May '+String(d.getUTCDate()).padStart(2,'0')+' '+String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+' UTC';
+        var branch=BRANCHES.find(function(x){return x.id===best.c.b;});
+        tooltip.innerHTML='<b>'+best.c.s+'</b> &middot; '+(branch?branch.label:best.c.b)+'<br>'+ds+'<br>'+(best.c.l||'')+(best.c.m?' <b>[merge]</b>':'');
+        tooltip.style.display='block';
+        tooltip.style.left=(e.clientX+14)+'px';
+        tooltip.style.top=(e.clientY-10)+'px';
+      } else { tooltip.style.display='none'; }
     });
-    canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+    canvas.addEventListener('mouseleave',function(){tooltip.style.display='none';});
 
-    window.addEventListener('resize', function() {
-      if (!COMMITS) return;
-      var w = canvas.parentElement.clientWidth;
-      canvas.width = w * DPR;
-      canvas.height = CANVAS_H * DPR;
-      ctx.setTransform(1,0,0,1,0,0);
-      ctx.scale(DPR, DPR);
-      computePositions(w);
-      drawFrame();
+    window.addEventListener('resize',function(){
+      if(!COMMITS) return;
+      resizeCanvas(); drawFrame();
     });
   })();
   </script>
 </section>
-
 
 <!-- ============ TL;DR ============ -->
 <section id="tldr" class="bg-white">
@@ -1002,24 +1055,6 @@
   </div>
 </section>
 
-<!-- ============ APPENDIX ============ -->
-<section id="appendix" class="bg-white">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-6">Technical Appendix</h2>
-    <h3 class="text-base font-black text-ink mb-3">How to reproduce this analysis</h3>
-    <ol class="list-decimal ml-5 space-y-2 text-sm text-slate-700">
-      <li>Blobless-clone the repo:
-        <span class="mono">git clone --filter=blob:none https://github.com/oven-sh/bun</span></li>
-      <li>Check out the PR&nbsp;#30412 head and walk it with <span class="mono">git log</span> against the merge base.</li>
-      <li>Export every commit's SHA, author/committer identities, both timestamps, message, and parents.</li>
-      <li>Bucket inter-commit gaps; compare author vs. committer deltas; tag commits by phase from the message prefix.</li>
-      <li>Extract raw timezone offsets with <span class="mono">git cat-file -p &lt;sha&gt;</span> and grep the author line.</li>
-      <li>The full extraction and analysis scripts &mdash; <span class="mono">git_forensics.py</span> and
-      <span class="mono">analyze_bun_pr.py</span> &mdash; ship in this repository alongside this page, together with
-      the raw <span class="mono">all_commits_git.tsv</span> dataset.</li>
-    </ol>
-  </div>
-</section>
 
 <!-- ============ FOOTER ============ -->
 <footer class="bg-ink">
