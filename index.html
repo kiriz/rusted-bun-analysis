@@ -230,6 +230,7 @@
       PR&nbsp;#30412
     </a>
     <div class="hidden md:flex items-center gap-3 text-xs font-medium text-white/60">
+      <a href="#viz" class="hover:text-white transition">Topology</a>
       <a href="#tldr" class="hover:text-white transition">TL;DR</a>
       <a href="#paradox" class="hover:text-white transition">Speed</a>
       <a href="#architecture" class="hover:text-white transition">Architecture</a>
@@ -250,219 +251,25 @@
 <header id="hero" class="bg-ink relative overflow-hidden">
   <div class="absolute inset-0 opacity-30"
        style="background-image: radial-gradient(circle at 18% 20%, #F59E0B55 0%, transparent 45%), radial-gradient(circle at 85% 70%, #7C3AED66 0%, transparent 50%);"></div>
-  <div class="relative max-w-5xl mx-auto px-5 py-20 sm:py-28 text-center">
-    <span class="inline-block text-xs font-semibold tracking-widest uppercase text-rust mb-6 border border-rust/40 rounded-full px-4 py-1.5">
-      oven-sh/bun &middot; PR&nbsp;#30412
-    </span>
-    <h1 class="text-white font-black tracking-tight leading-[1.05] text-5xl sm:text-7xl lg:text-8xl">
-      Anthropic
-      <span class="bg-gradient-to-r from-rust to-amber-300 bg-clip-text text-transparent">RUSTed</span>
-      the
-      <span class="bg-gradient-to-r from-ai to-fuchsia-400 bg-clip-text text-transparent">BUN</span>
+  <div class="relative max-w-5xl mx-auto px-5 py-16 sm:py-22 text-center">
+    <h1 class="text-white font-black tracking-tight leading-none text-4xl sm:text-6xl lg:text-7xl whitespace-nowrap">
+      Anthropic&nbsp;<span class="bg-gradient-to-r from-rust to-amber-300 bg-clip-text text-transparent">RUSTed</span>&nbsp;the&nbsp;<span class="bg-gradient-to-r from-ai to-fuchsia-400 bg-clip-text text-transparent">BUN</span>
     </h1>
-    <p class="mt-7 text-xl sm:text-2xl text-white/85 font-medium tabular-nums">
-      1,009,257 lines of Rust
+    <p class="mt-6 text-base sm:text-lg text-white/70 tabular-nums">
+      1,009,257 lines of Rust &middot; 6,755 commits &middot; 10 days
     </p>
-    <p class="mt-2 text-base sm:text-lg text-white/55">
-      6,755 commits &middot; 10 days &middot;
-    </p>
-
+    <div class="mt-6 flex items-center justify-center gap-4 flex-wrap">
+      <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
+         class="text-xs font-semibold text-white/60 hover:text-white border border-white/20 hover:border-white/50 rounded-lg px-4 py-2 transition">
+        oven-sh/bun PR&nbsp;#30412 &rarr;
+      </a>
+      <a href="https://github.com/kiriz/rusted-bun-analysis" target="_blank" rel="noopener"
+         class="text-xs font-semibold text-white/60 hover:text-white border border-white/20 hover:border-white/50 rounded-lg px-4 py-2 transition">
+        kiriz/rusted-bun-analysis &rarr;
+      </a>
+    </div>
   </div>
 </header>
-
-<!-- ============ TL;DR ============ -->
-<section id="tldr" class="bg-white">
-  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-8">TL;DR</h2>
-    <ul class="space-y-5 text-lg sm:text-xl leading-relaxed text-slate-700">
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
-        <span>99.2% of commits share identical author and committer timestamps — code written and committed in a continuous
-        live stream, with no rebasing or history rewriting.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
-        <span><strong class="text-ink">The engineering was expert-grade.</strong> Before writing a line of Rust the
-        agent built its own 175-line crate-DAG analyzer, then design docs for cycle-breaking and dispatch, then the
-        migration itself &mdash; the canonical instrument&rarr;spec&rarr;decompose playbook.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-rust"></span>
-        <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,635 commits are
-        <span class="mono">+0000</span> UTC (Claude Code's automated environment); 38 are <span class="mono">-0700</span>
-        Pacific (Jarred Sumner on his Mac). The split marks exactly where the human intervened.</span>
-      </li>
-      <li class="flex gap-4">
-        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
-        <span><strong class="text-ink">The migration is ~90% complete, not finished.</strong> 710,139 lines of the
-        original Zig remain in the repo &mdash; not compiled, not shipped, kept as semantic reference while
-        the agent ports the remaining ~113 files. <span class="mono">scripts/port-batch.ts</span> keeps the
-        machine running after the PR merged.</span>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<!-- ============ SPEED PARADOX ============ -->
-<section id="paradox" class="bg-surface">
-  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      Commits land every nine seconds. Rust compilation takes minutes. The agent writes and commits without compiling.
-    </p>
-
-    <p class="text-lg text-slate-700 leading-relaxed mb-8">
-      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
-      inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
-    </p>
-
-    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8">
-      <h3 class="text-xl font-black text-ink mb-5">Write and verify run on different clocks</h3>
-      <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
-        <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
-          <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
-          <div class="text-2xl font-black text-ink mb-1">~9s median</div>
-          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span class="mono">git commit</span>.
-          No compilation. Just write and record.</p>
-        </div>
-        <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
-        <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
-          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
-          <div class="text-2xl font-black text-ink mb-1">hours</div>
-          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span class="mono">ci-auto-fix</span>,
-          <span class="mono">divergence-fix</span>) repair them &rarr; merge back.</p>
-        </div>
-      </div>
-      <p class="text-base text-slate-700 mt-6 leading-relaxed">
-        Writing is fast. Verification is async.
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- ============ AGENT ARCHITECTURE ============ -->
-<section id="architecture" class="bg-surface">
-  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
-    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Agent Architecture</h2>
-    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The PR was not one agent typing in a straight line &mdash; it was a main porting branch with a fleet of
-      specialized sub-agent branches feeding fixes back into it.
-    </p>
-
-    <!-- Branch topology diagram -->
-    <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto">
-      <div class="mono text-xs sm:text-sm leading-relaxed min-w-[560px]">
-        <div class="text-white/50 mb-4">// branch topology &mdash; sub-agents merge INTO the PR branch</div>
-
-        <div class="flex items-center gap-3 mb-2">
-          <span class="inline-flex items-center gap-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-verified"></span>
-            <span class="text-verified font-bold">claude/phase-a-port</span>
-          </span>
-          <span class="text-white/40">&larr; the PR branch (main line of work)</span>
-        </div>
-        <div class="text-white/20 ml-2">│</div>
-
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">├──&lt;</span>
-          <span class="text-ai font-semibold">claude/unsafe-5k</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×27</span>
-          <span class="text-white/50">unsafe-block elimination campaign</span>
-        </div>
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">├──&lt;</span>
-          <span class="text-ai font-semibold">claude/bench-until-green</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×19</span>
-          <span class="text-white/50">continuous benchmark-tuning loop</span>
-        </div>
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">├──&lt;</span>
-          <span class="text-ai font-semibold">claude/flaky-stabilize*</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×3</span>
-          <span class="text-white/50">flaky-test repair</span>
-        </div>
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">├──&lt;</span>
-          <span class="text-ai font-semibold">claude/ci-auto-fix-{N}</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×4</span>
-          <span class="text-white/50">automated CI-failure handling</span>
-        </div>
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">├──&lt;</span>
-          <span class="text-ai font-semibold">claude/divergence-fix-all</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×2</span>
-          <span class="text-white/50">Zig&rarr;Rust spec-correctness fixes</span>
-        </div>
-        <div class="flex items-start gap-2 ml-2">
-          <span class="text-white/30">└──&lt;</span>
-          <span class="text-ai font-semibold">claude/security-audit-patches</span>
-          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×1</span>
-          <span class="text-white/50">security review</span>
-        </div>
-
-        <div class="text-white/50 mt-4">// every branch is namespaced <span class="text-ai">claude/*</span> &mdash; 276 merge commits total</div>
-      </div>
-    </div>
-    <p class="text-sm text-slate-500 mt-3">
-      Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main port
-      branch &mdash; the campaign re-ran until its goal condition was met.
-    </p>
-
-    <!-- Phase breakdown chart -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 mt-10">
-      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits by phase</h3>
-      <p class="text-xs text-slate-500 mb-4">Where the 6,755 commits actually went</p>
-      <div class="chart-box" style="height: 340px;">
-        <canvas id="chartPhases"></canvas>
-      </div>
-    </div>
-
-    <!-- Phase glossary -->
-    <h3 class="text-xl font-black tracking-tight mt-10 mb-4">What each phase means</h3>
-    <div class="grid sm:grid-cols-2 gap-4">
-      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-a &mdash; initial bulk drafts</div>
-        <p class="text-sm text-slate-600">May 04&ndash;05. The initial bulk-drafting phase, where the AI generated
-        large translation batches &mdash; 12 to 90 files per commit &mdash; before the structured sequential phases
-        began. The runway, before the engineering plan formalized.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-b &mdash; gating &amp; verify</div>
-        <p class="text-sm text-slate-600">Wrapping Zig types behind Rust gates and verifying correctness one tier at
-        a time before opening the floodgates.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-c &mdash; cleanup passes</div>
-        <p class="text-sm text-slate-600">Intermediate sweeps that tidy the tree between the heavy structural
-        phases.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-d &mdash; the core port</div>
-        <p class="text-sm text-slate-600">The mechanical Zig&rarr;Rust translation of <span class="mono">bun_runtime</span>,
-        the bundler, unsafe blocks, and TODO items. The single largest phase.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-e &mdash; RAII conversion</div>
-        <p class="text-sm text-slate-600">Giving Rust ownership of resources that Zig managed by hand &mdash;
-        translating manual lifecycles into RAII patterns.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-f &mdash; further cleanup</div>
-        <p class="text-sm text-slate-600">A second cleanup wave after RAII conversion settles the ownership model.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-g &mdash; harvest</div>
-        <p class="text-sm text-slate-600">Collecting and cataloging remaining work &mdash; building the to-do list
-        for the final phase.</p>
-      </div>
-      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
-        <div class="mono text-sm font-bold text-ai mb-1">phase-h &mdash; unsafe-wrap</div>
-        <p class="text-sm text-slate-600">Systematic wrapping of the 14,000+ remaining <span class="mono">unsafe</span>
-        sites &mdash; the long tail of memory-safety work that a Rust rewrite is supposed to be <em>about</em>.</p>
-      </div>
-    </div>
-  </div>
-</section>
 
 <!-- ============ BRANCH TOPOLOGY VIZ ============ -->
 <section id="viz" class="bg-surface">
@@ -715,6 +522,203 @@
   })();
   </script>
 </section>
+
+
+<!-- ============ TL;DR ============ -->
+<section id="tldr" class="bg-white">
+  <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-8">TL;DR</h2>
+    <ul class="space-y-5 text-lg sm:text-xl leading-relaxed text-slate-700">
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
+        <span>99.2% of commits share identical author and committer timestamps — code written and committed in a continuous
+        live stream, with no rebasing or history rewriting.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
+        <span><strong class="text-ink">The engineering was expert-grade.</strong> Before writing a line of Rust the
+        agent built its own 175-line crate-DAG analyzer, then design docs for cycle-breaking and dispatch, then the
+        migration itself &mdash; the canonical instrument&rarr;spec&rarr;decompose playbook.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-rust"></span>
+        <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,635 commits are
+        <span class="mono">+0000</span> UTC (Claude Code's automated environment); 38 are <span class="mono">-0700</span>
+        Pacific (Jarred Sumner on his Mac). The split marks exactly where the human intervened.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
+        <span><strong class="text-ink">The migration is ~90% complete, not finished.</strong> 710,139 lines of the
+        original Zig remain in the repo &mdash; not compiled, not shipped, kept as semantic reference while
+        the agent ports the remaining ~113 files. <span class="mono">scripts/port-batch.ts</span> keeps the
+        machine running after the PR merged.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ SPEED PARADOX ============ -->
+<section id="paradox" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      Commits land every nine seconds. Rust compilation takes minutes. The agent writes and commits without compiling.
+    </p>
+
+    <p class="text-lg text-slate-700 leading-relaxed mb-8">
+      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
+      inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
+    </p>
+
+    <div class="rounded-2xl border border-ai/30 bg-ai/5 p-6 sm:p-8">
+      <h3 class="text-xl font-black text-ink mb-5">Write and verify run on different clocks</h3>
+      <div class="grid sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div class="rounded-xl bg-verified/10 border border-verified/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-verified mb-1">Fast inner loop</div>
+          <div class="text-2xl font-black text-ink mb-1">~9s median</div>
+          <p class="text-sm text-slate-600">Claude&nbsp;Code generates ~70 lines &rarr; <span class="mono">git commit</span>.
+          No compilation. Just write and record.</p>
+        </div>
+        <div class="text-center text-slate-400 font-bold text-2xl rotate-90 sm:rotate-0">&#8644;</div>
+        <div class="rounded-xl bg-concern/10 border border-concern/40 p-5">
+          <div class="text-xs font-bold uppercase tracking-wide text-concern mb-1">Slow outer loop</div>
+          <div class="text-2xl font-black text-ink mb-1">hours</div>
+          <p class="text-sm text-slate-600">CI catches failures &rarr; sub-branches (<span class="mono">ci-auto-fix</span>,
+          <span class="mono">divergence-fix</span>) repair them &rarr; merge back.</p>
+        </div>
+      </div>
+      <p class="text-base text-slate-700 mt-6 leading-relaxed">
+        Writing is fast. Verification is async.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AGENT ARCHITECTURE ============ -->
+<section id="architecture" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Agent Architecture</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      The PR was not one agent typing in a straight line &mdash; it was a main porting branch with a fleet of
+      specialized sub-agent branches feeding fixes back into it.
+    </p>
+
+    <!-- Branch topology diagram -->
+    <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto">
+      <div class="mono text-xs sm:text-sm leading-relaxed min-w-[560px]">
+        <div class="text-white/50 mb-4">// branch topology &mdash; sub-agents merge INTO the PR branch</div>
+
+        <div class="flex items-center gap-3 mb-2">
+          <span class="inline-flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-verified"></span>
+            <span class="text-verified font-bold">claude/phase-a-port</span>
+          </span>
+          <span class="text-white/40">&larr; the PR branch (main line of work)</span>
+        </div>
+        <div class="text-white/20 ml-2">│</div>
+
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/unsafe-5k</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×27</span>
+          <span class="text-white/50">unsafe-block elimination campaign</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/bench-until-green</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×19</span>
+          <span class="text-white/50">continuous benchmark-tuning loop</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/flaky-stabilize*</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×3</span>
+          <span class="text-white/50">flaky-test repair</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/ci-auto-fix-{N}</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×4</span>
+          <span class="text-white/50">automated CI-failure handling</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">├──&lt;</span>
+          <span class="text-ai font-semibold">claude/divergence-fix-all</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×2</span>
+          <span class="text-white/50">Zig&rarr;Rust spec-correctness fixes</span>
+        </div>
+        <div class="flex items-start gap-2 ml-2">
+          <span class="text-white/30">└──&lt;</span>
+          <span class="text-ai font-semibold">claude/security-audit-patches</span>
+          <span class="text-caution font-bold bg-caution/10 px-1.5 rounded">×1</span>
+          <span class="text-white/50">security review</span>
+        </div>
+
+        <div class="text-white/50 mt-4">// every branch is namespaced <span class="text-ai">claude/*</span> &mdash; 276 merge commits total</div>
+      </div>
+    </div>
+    <p class="text-sm text-slate-500 mt-3">
+      Each <span class="mono">×N</span> is the number of times that sub-agent branch merged back into the main port
+      branch &mdash; the campaign re-ran until its goal condition was met.
+    </p>
+
+    <!-- Phase breakdown chart -->
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 mt-10">
+      <h3 class="text-sm font-bold text-slate-700 mb-1">Commits by phase</h3>
+      <p class="text-xs text-slate-500 mb-4">Where the 6,755 commits actually went</p>
+      <div class="chart-box" style="height: 340px;">
+        <canvas id="chartPhases"></canvas>
+      </div>
+    </div>
+
+    <!-- Phase glossary -->
+    <h3 class="text-xl font-black tracking-tight mt-10 mb-4">What each phase means</h3>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-a &mdash; initial bulk drafts</div>
+        <p class="text-sm text-slate-600">May 04&ndash;05. The initial bulk-drafting phase, where the AI generated
+        large translation batches &mdash; 12 to 90 files per commit &mdash; before the structured sequential phases
+        began. The runway, before the engineering plan formalized.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-b &mdash; gating &amp; verify</div>
+        <p class="text-sm text-slate-600">Wrapping Zig types behind Rust gates and verifying correctness one tier at
+        a time before opening the floodgates.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-c &mdash; cleanup passes</div>
+        <p class="text-sm text-slate-600">Intermediate sweeps that tidy the tree between the heavy structural
+        phases.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-d &mdash; the core port</div>
+        <p class="text-sm text-slate-600">The mechanical Zig&rarr;Rust translation of <span class="mono">bun_runtime</span>,
+        the bundler, unsafe blocks, and TODO items. The single largest phase.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-e &mdash; RAII conversion</div>
+        <p class="text-sm text-slate-600">Giving Rust ownership of resources that Zig managed by hand &mdash;
+        translating manual lifecycles into RAII patterns.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-f &mdash; further cleanup</div>
+        <p class="text-sm text-slate-600">A second cleanup wave after RAII conversion settles the ownership model.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-g &mdash; harvest</div>
+        <p class="text-sm text-slate-600">Collecting and cataloging remaining work &mdash; building the to-do list
+        for the final phase.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 sm:col-span-2">
+        <div class="mono text-sm font-bold text-ai mb-1">phase-h &mdash; unsafe-wrap</div>
+        <p class="text-sm text-slate-600">Systematic wrapping of the 14,000+ remaining <span class="mono">unsafe</span>
+        sites &mdash; the long tail of memory-safety work that a Rust rewrite is supposed to be <em>about</em>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
 
 <!-- ============ ENGINEERING PLAN ============ -->
 <section id="engineering" class="bg-white">
