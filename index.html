@@ -55,13 +55,15 @@
       <span class="inline-block w-2.5 h-2.5 rounded-full bg-ai"></span>
       PR&nbsp;#30412&nbsp;<span class="text-white/40 font-normal hidden sm:inline">forensic analysis</span>
     </a>
-    <div class="hidden md:flex items-center gap-5 text-xs font-medium text-white/60">
+    <div class="hidden md:flex items-center gap-3 text-xs font-medium text-white/60">
       <a href="#tldr" class="hover:text-white transition">TL;DR</a>
       <a href="#timeline" class="hover:text-white transition">Timeline</a>
-      <a href="#architecture" class="hover:text-white transition">Agent Architecture</a>
+      <a href="#architecture" class="hover:text-white transition">Architecture</a>
+      <a href="#engineering" class="hover:text-white transition">Eng.&nbsp;Plan</a>
+      <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
       <a href="#paradox" class="hover:text-white transition">Speed Paradox</a>
       <a href="#tokens" class="hover:text-white transition">Token Math</a>
-      <a href="#questions" class="hover:text-white transition">Open Questions</a>
+      <a href="#questions" class="hover:text-white transition">Questions</a>
     </div>
     <a href="https://github.com/oven-sh/bun/pull/30412" target="_blank" rel="noopener"
        class="text-xs font-semibold bg-ai hover:bg-ai/80 transition text-white px-3 py-1.5 rounded-md">
@@ -137,6 +139,22 @@
         <span><strong class="text-ink">The approach was structured.</strong> Work moved through explicit phases
         labeled <span class="mono">a&nbsp;&rarr;&nbsp;h</span>, with multiple sub-agent branches — every one of
         them named <span class="mono">claude/*</span> — merging fixes back into the main port branch.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
+        <span><strong class="text-ink">The engineering plan was expert-grade.</strong> Before writing a line of
+        Rust, the agent wrote its own 175-line crate-dependency analyzer (<span
+        class="mono">crate-dag.ts</span>), then design documents specifying cycle-breaking and dispatch
+        strategies — the canonical "instrument&nbsp;&rarr;&nbsp;spec&nbsp;&rarr;&nbsp;decompose" playbook for
+        monolith-to-workspace migrations.</span>
+      </li>
+      <li class="flex gap-4">
+        <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
+        <span><strong class="text-ink">The AI-vs-human boundary is visible in the raw git objects.</strong>
+        Every commit encodes the author's timezone: <strong>6,635 commits are
+        <span class="mono">+0000</span></strong> (Claude Code's UTC automated environment) versus
+        <strong>38 commits are <span class="mono">-0700</span></strong> (Jarred Sumner's Pacific-timezone Mac).
+        The split marks exactly where the human intervened.</span>
       </li>
       <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-caution"></span>
@@ -222,6 +240,13 @@
           <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">06</span>
           <span><strong>Inspected diff sizes per inter-commit gap bucket</strong> — to see whether fast commits
           carry small diffs (write-only) or large diffs (something else).</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">07</span>
+          <span><strong>Extracted raw timezone offsets</strong> from every git commit object via <span
+          class="mono">git cat-file -p</span>, separating the <span class="mono">+0000</span> automated commits
+          from the <span class="mono">-0700</span> human commits to identify where Jarred intervened
+          directly.</span>
         </li>
       </ul>
       <p class="text-sm text-slate-500 mt-6 pt-6 border-t border-slate-200">
@@ -398,10 +423,238 @@
   </div>
 </section>
 
-<!-- ============ 7. COMMIT SPEED PARADOX ============ -->
-<section id="paradox" class="bg-surface">
+<!-- ============ 7. ENGINEERING PLAN ============ -->
+<section id="engineering" class="bg-surface">
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
     <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 03</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Engineering Plan</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      The most revealing finding is not the commit velocity — it is what the agent did before writing a single
+      line of Rust.
+    </p>
+
+    <!-- First commit: crate-dag.ts -->
+    <div class="rounded-2xl bg-ink p-5 sm:p-8 mb-8">
+      <div class="mono text-xs text-white/40 mb-3">commit 2050a922ff00 &middot; 2026-05-05 00:00:27 UTC &middot; First commit of phase-b0</div>
+      <div class="mono text-sm leading-relaxed text-slate-300">
+        <div><span class="text-verified">+++ scripts/crate-dag.ts</span> <span class="text-white/40">(+175 lines)</span></div>
+        <div class="border-t border-white/10 my-3"></div>
+        <div><span class="text-ai">#!/usr/bin/env bun</span></div>
+        <div><span class="text-white/50">// Compute crate DAG, intended tiers, and back-edges for Phase B-0.</span></div>
+        <div><span class="text-blue-300">import</span> { readdirSync, readFileSync } <span class="text-blue-300">from</span> <span class="text-green-300">"node:fs"</span>;</div>
+        <div class="mt-2"><span class="text-blue-300">const</span> TIER: Record&lt;string, number&gt; = {</div>
+        <div class="ml-4">bun_core: 0, bun_alloc: 0, wyhash: 0, <span class="text-white/40">// T0 — zero-dep primitives</span></div>
+        <div class="ml-4">js_parser: 4, bundler: 5,              <span class="text-white/40">// T4/T5 — heavy subsystems</span></div>
+        <div class="ml-4">bun_jsc: 6, napi: 6, shell: 6,         <span class="text-white/40">// T6 — top-level runtime</span></div>
+        <div>};</div>
+      </div>
+      <p class="text-white/60 text-sm mt-4">Commit message: <span class="text-caution font-semibold">phase-b0: add crate DAG analyzer</span></p>
+    </div>
+
+    <p class="text-lg leading-relaxed text-slate-700 mb-10">
+      Before touching a single source file, the agent wrote a <strong class="text-ink">175-line TypeScript
+      program</strong> that maps the entire codebase: 96 crates, their intended dependency tiers (T0
+      zero-dep primitives through T6 subsystems), and which imports create cycles. You cannot safely extract a
+      monolith into a multi-crate Cargo workspace without knowing the dependency graph first. The agent built
+      its own instrumentation — then three <span class="mono">docs:</span> commits specifying cycle-breaking
+      and dispatch strategies — before writing any migration code at all.
+    </p>
+
+    <!-- 9-step migration plan -->
+    <h3 class="text-xl font-black tracking-tight mb-6">The migration playbook — reconstructed from the commit history</h3>
+    <div class="space-y-2">
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">1</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Instrument</div>
+          <p class="text-sm text-slate-600 mt-0.5">Write <span class="mono">crate-dag.ts</span> — compute the full dependency DAG, assign tiers, identify cycles before touching anything.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">2</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Spec</div>
+          <p class="text-sm text-slate-600 mt-0.5">Write design docs (<span class="mono">docs: Dispatch</span>, <span class="mono">docs: CYCLEBREAK.md</span>, <span class="mono">docs: Concurrency</span>) — the cross-crate dispatch strategy and cycle-breaking spec, committed before any code moves.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">3</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Break cycles — DELETE pass</div>
+          <p class="text-sm text-slate-600 mt-0.5">Remove 99 spurious back-edge imports across 67 files that would create cycles in the new workspace. Cycle-breaking before extraction is the hard prerequisite.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">4</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Move-out passes</div>
+          <p class="text-sm text-slate-600 mt-0.5">Relocate verified-clean crates to their tiers in three passes: 36 crates, then 4 fixed crates, then a final 4. "36 crates" was independently confirmed: exactly 36 distinct <span class="mono">src/</span> subdirectories in the diff.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">5</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Move-in pass</div>
+          <p class="text-sm text-slate-600 mt-0.5">Pull 579 symbols into 33 target crates, consolidating the symbol graph after the structural moves.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">6</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Collapse tier-6</div>
+          <p class="text-sm text-slate-600 mt-0.5">Fold <span class="mono">bake</span>, <span class="mono">shell</span>, <span class="mono">test_runner</span>, <span class="mono">cli</span>, and <span class="mono">napi</span> into <span class="mono">runtime/</span> — the top-level crate boundary.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">7</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Scaffold the Cargo workspace</div>
+          <p class="text-sm text-slate-600 mt-0.5">One commit, 151 files, +3,184 lines, zero deletions: 96 per-crate <span class="mono">Cargo.toml</span> manifests plus the root workspace manifest, plus 52 autogenerated <span class="mono">lib.rs</span> files. "96 crates" confirmed exactly — 96 member manifests.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">8</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Prune back-edge deps</div>
+          <p class="text-sm text-slate-600 mt-0.5">Remove back-edge dependencies from the generated manifests to enforce workspace acyclicity — the Cargo resolver requires a DAG.</p>
+        </div>
+      </div>
+      <div class="flex gap-4 rounded-xl bg-white border border-slate-200 p-4">
+        <span class="mono text-sm font-bold text-ai bg-ai/10 rounded px-2.5 py-1 shrink-0 self-start">9</span>
+        <div>
+          <div class="font-bold text-ink text-sm">Compile bottom-up — one crate per commit</div>
+          <p class="text-sm text-slate-600 mt-0.5">Start from the lowest-tier crates and compile upward. Each commit corresponds to one crate reaching "compiles clean." Fix errors, commit, move to the next tier.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- phase-b1 compile cadence -->
+    <h3 class="text-xl font-black tracking-tight mt-12 mb-4">Phase-b1 — the compile loop in real time</h3>
+    <p class="text-base text-slate-700 leading-relaxed mb-5">
+      The phase-b1 commit timestamps tell their own story. Each commit is exactly one crate reaching green —
+      and the inter-commit gaps are irregular in a telling way:
+    </p>
+    <div class="overflow-x-auto rounded-2xl border border-slate-200">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-ink text-white">
+          <tr>
+            <th class="px-4 py-3 font-semibold">Time (UTC)</th>
+            <th class="px-4 py-3 font-semibold">Commit</th>
+            <th class="px-4 py-3 font-semibold text-right">Gap</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white mono text-xs sm:text-sm">
+          <tr><td class="px-4 py-2.5 text-slate-500">04:09:11</td><td class="px-4 py-2.5 text-ink">scaffold Cargo workspace (96 crates)</td><td class="px-4 py-2.5 text-right text-slate-400">—</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:10:21</td><td class="px-4 py-2.5 text-ink">prune back-edge deps from Cargo.toml</td><td class="px-4 py-2.5 text-right text-slate-500">+70s</td></tr>
+          <tr class="bg-concern/5"><td class="px-4 py-2.5 text-slate-500">04:14:12</td><td class="px-4 py-2.5 text-ink font-semibold">bun_alloc compiles</td><td class="px-4 py-2.5 text-right text-concern font-bold">+231s</td></tr>
+          <tr class="bg-concern/5"><td class="px-4 py-2.5 text-slate-500">04:17:40</td><td class="px-4 py-2.5 text-ink font-semibold">bun_core compiles</td><td class="px-4 py-2.5 text-right text-concern font-bold">+208s</td></tr>
+          <tr class="bg-verified/5"><td class="px-4 py-2.5 text-slate-500">04:18:14</td><td class="px-4 py-2.5 text-ink">windows_sys compiles</td><td class="px-4 py-2.5 text-right text-verified">+34s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:19:35</td><td class="px-4 py-2.5 text-ink">collections compiles</td><td class="px-4 py-2.5 text-right text-slate-500">+81s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:20:37</td><td class="px-4 py-2.5 text-ink">unicode compiles</td><td class="px-4 py-2.5 text-right text-slate-500">+62s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:22:26</td><td class="px-4 py-2.5 text-ink">base64 + platform compile</td><td class="px-4 py-2.5 text-right text-slate-500">+109s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:25:30</td><td class="px-4 py-2.5 text-ink">errno compiles</td><td class="px-4 py-2.5 text-right text-slate-500">+184s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:26:39</td><td class="px-4 py-2.5 text-ink">uws_sys + 5 *_sys compile</td><td class="px-4 py-2.5 text-right text-slate-500">+69s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:27:48</td><td class="px-4 py-2.5 text-ink">ptr + safety compile</td><td class="px-4 py-2.5 text-right text-slate-500">+69s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:30:09</td><td class="px-4 py-2.5 text-ink">paths + string compile</td><td class="px-4 py-2.5 text-right text-slate-500">+141s</td></tr>
+          <tr><td class="px-4 py-2.5 text-slate-500">04:31:01</td><td class="px-4 py-2.5 text-ink">sys compiles</td><td class="px-4 py-2.5 text-right text-slate-500">+52s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="rounded-xl bg-ai/5 border border-ai/30 p-5 mt-5">
+      <p class="text-base text-slate-700 leading-relaxed">
+        <span class="text-concern font-bold">231 seconds</span> for <span class="mono">bun_alloc</span> (the foundational allocator, hardest),
+        <span class="text-verified font-bold">34 seconds</span> for <span class="mono">windows_sys</span> (small, mostly declarations) —
+        the gaps are <strong class="text-ink">irregular and proportional to crate complexity</strong>.
+        A scripted replay of pre-generated commits would produce uniform or pinned timestamps. This batch reads as
+        a genuine <em>compile → read errors → fix → recompile</em> loop — the one batch in the forensic sample
+        whose timestamps appear organic rather than automated.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 8. TIMEZONE FORENSICS ============ -->
+<section id="forensics" class="bg-white">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 04</span>
+    <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The AI vs. Human Boundary</h2>
+    <p class="text-lg text-slate-600 mb-8 max-w-2xl">
+      Every git commit object encodes the author's timezone offset. In a 6,755-commit history, that single
+      field draws the sharpest possible line between machine and human.
+    </p>
+
+    <!-- Timezone split -->
+    <div class="grid sm:grid-cols-2 gap-5 mb-10">
+      <div class="rounded-2xl border-2 border-ai bg-ai/5 p-6 sm:p-8">
+        <div class="text-5xl sm:text-6xl font-black text-ai tabular-nums mb-2">6,635</div>
+        <div class="mono text-xl font-bold text-ink mb-3">author tz: +0000</div>
+        <p class="text-sm text-slate-600 leading-relaxed">Claude Code's automated harness runs in UTC. There is
+        no local timezone because there is no human at a machine — just an agent loop with a system clock.</p>
+      </div>
+      <div class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-6 sm:p-8">
+        <div class="text-5xl sm:text-6xl font-black text-slate-600 tabular-nums mb-2">38</div>
+        <div class="mono text-xl font-bold text-ink mb-3">author tz: -0700</div>
+        <p class="text-sm text-slate-600 leading-relaxed">Jarred Sumner, committing directly from his Mac.
+        Pacific Standard Time — consistent with every other commit he has ever made in this repository.</p>
+      </div>
+    </div>
+
+    <p class="text-lg leading-relaxed text-slate-700 mb-8">
+      Jarred's entire pre-PR commit history on <span class="mono">oven-sh/bun</span> is overwhelmingly
+      <span class="mono">-0700</span> or <span class="mono">-0800</span> (Pacific, standard and daylight saving).
+      The entire PR's 6,635 commits depart from that pattern uniformly — the fingerprint of an automated,
+      timezone-agnostic environment. The 38 <span class="mono">-0700</span> commits are the moments where
+      Jarred reached in himself.
+    </p>
+
+    <!-- What Jarred's 38 commits were -->
+    <h3 class="text-xl font-black tracking-tight mb-5">What Jarred's 38 manual commits look like</h3>
+    <div class="rounded-2xl bg-ink p-5 sm:p-8 overflow-x-auto mb-6">
+      <div class="mono text-xs sm:text-sm leading-relaxed min-w-[520px]">
+        <div class="text-white/40 mb-4">// -0700 commits — Jarred direct, by category</div>
+        <div class="space-y-1">
+          <div class="text-caution font-bold text-xs uppercase tracking-wide mb-2">May 08 — Build infrastructure</div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: wire Rust crates into Bun's CMake build system</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: add link_interface! macro for cross-crate FFI symbols (×N)</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">build: merge main into port branch (sync upstream changes)</span></div>
+          <div class="text-caution font-bold text-xs uppercase tracking-wide mt-4 mb-2">May 10–14 — Architectural decisions &amp; reverts</div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Unify AST data types into bun_ast crate</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Ensure strings match up (byte-exact Zig/Rust parity)</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">arch: Make three.js bench declare deps (benchmark integrity)</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">revert: revert "phase-h: unsafe-wrap r3" (phase went wrong)</span></div>
+          <div class="flex gap-3"><span class="text-white/30 shrink-0">─</span><span class="text-slate-300">debug: add debug assertions for invariant checks</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-3 gap-4">
+      <div class="rounded-xl bg-surface border border-slate-200 p-5">
+        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Build wiring</div>
+        <p class="text-sm text-slate-600">Hooking the new Rust crates into Bun's existing CMake build system — the kind of system-level plumbing that requires intimate knowledge of the build toolchain.</p>
+      </div>
+      <div class="rounded-xl bg-surface border border-slate-200 p-5">
+        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Architectural decisions</div>
+        <p class="text-sm text-slate-600">AST unification, string normalization, benchmark dependency declarations — judgment calls that set constraints the AI then had to work within.</p>
+      </div>
+      <div class="rounded-xl bg-surface border border-slate-200 p-5">
+        <div class="text-xs font-bold uppercase tracking-wide text-ink mb-2">Reverts</div>
+        <p class="text-sm text-slate-600">When a phase produced results Jarred didn't accept, he reverted it directly. The revert commits are themselves the evidence of human quality control.</p>
+      </div>
+    </div>
+
+    <p class="text-base text-slate-600 leading-relaxed mt-8">
+      The pattern is clean: the AI handled the mechanical translation at scale; the human handled build
+      infrastructure, high-level architectural decisions, and the judgment calls that determined when a phase
+      was acceptable. The timezone split is not absolute — an agent can commit with any timezone if configured —
+      but it is consistent throughout, and consistent with every other signal in the history.
+    </p>
+  </div>
+</section>
+
+<!-- ============ 9. COMMIT SPEED PARADOX ============ -->
+<section id="paradox" class="bg-surface">
+  <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 05</span>
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">The Commit-Speed Paradox</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
       A commit every nine seconds is impossible if each commit includes a Rust compile. So either the timeline
@@ -495,7 +748,7 @@
 <!-- ============ 8. TOKEN MATH ============ -->
 <section id="tokens" class="bg-white">
   <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 04</span>
+    <span class="text-xs font-bold tracking-widest uppercase text-ai">Section 06</span>
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Token Math</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
       Does the volume even add up for a single agent? Run the back-of-envelope numbers and it does — with room
@@ -552,7 +805,7 @@
 <!-- ============ 9. OPEN QUESTIONS ============ -->
 <section id="questions" class="bg-surface">
   <div class="max-w-4xl mx-auto px-5 py-16 sm:py-20">
-    <span class="text-xs font-bold tracking-widest uppercase text-concern">Section 05</span>
+    <span class="text-xs font-bold tracking-widest uppercase text-concern">Section 07</span>
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mt-2 mb-3">Open Questions for Experts</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
       The commit history proves the work happened and how fast. It does not prove the result is
@@ -723,10 +976,80 @@ unpack on enqueue hot path (server)</pre>
             <li>Check out the PR&nbsp;#30412 head and walk it with <span class="mono">git log</span> against the merge base.</li>
             <li>Export every commit's SHA, author/committer identities, both timestamps, message, and parents.</li>
             <li>Bucket inter-commit gaps; compare author vs. committer deltas; tag commits by phase from the message prefix.</li>
+            <li>Extract raw timezone offsets with <span class="mono">git cat-file -p &lt;sha&gt;</span> and grep the author line.</li>
             <li>The full extraction and analysis scripts — <span class="mono">git_forensics.py</span> and
             <span class="mono">analyze_bun_pr.py</span> — ship in this repository alongside this page, together
             with the raw <span class="mono">all_commits_git.tsv</span> dataset.</li>
           </ol>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-3">Batch forensics — three sampled commit bursts</h3>
+          <p class="text-sm text-slate-600 mb-5">Raw git objects were inspected for three representative bursts using <span class="mono">git cat-file -p</span> and <span class="mono">git diff-tree --numstat -r</span>. Every countable claim was verified against the object store.</p>
+
+          <div class="space-y-4">
+            <div class="rounded-xl border border-slate-200 bg-surface p-5">
+              <div class="flex items-start gap-3 mb-3">
+                <span class="mono text-xs font-bold text-caution bg-caution/10 rounded px-2 py-1 shrink-0">BATCH A</span>
+                <div>
+                  <div class="font-bold text-ink text-sm">15-commit perf burst · ts: 1778548419 · 2026-05-12 01:13:39Z</div>
+                  <div class="text-xs text-slate-500 mt-0.5">All 15 share the exact same Unix second. All tz: +0000. Author == committer on all 15.</div>
+                </div>
+              </div>
+              <p class="text-sm text-slate-700 leading-relaxed">The 15-for-15 identical second, combined with uniform <span class="mono">+0000</span> and author&nbsp;==&nbsp;committer on every commit, is the signature of <strong>GIT_AUTHOR_DATE / GIT_COMMITTER_DATE pinning</strong> — standard practice in automated workflows. The parent chain is fully linear and cryptographically sealed (each commit's SHA encodes its parent's SHA). The diffs themselves are real and semantically coherent: a perf sweep across 15 distinct subsystems (<span class="mono">bun_core</span>, <span class="mono">wyhash</span>, <span class="mono">base64</span>, <span class="mono">json_lexer</span>, etc.), with one targeted optimization per subsystem, including a one-liner <span class="mono">#[inline]</span>&nbsp;→&nbsp;<span class="mono">#[inline(always)]</span> micro-opt on a lexer hot loop. <strong>Verdict: timestamp pinning (benign). Diffs: real and plausible.</strong></p>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-surface p-5">
+              <div class="flex items-start gap-3 mb-3">
+                <span class="mono text-xs font-bold text-verified bg-verified/10 rounded px-2 py-1 shrink-0">BATCH B</span>
+                <div>
+                  <div class="font-bold text-ink text-sm">14-commit divergence sweep · ts: 1778633684–685 · 2026-05-13 00:54:44–45Z</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Sweep crosses a second boundary mid-run. Mild evidence against hard pinning — consistent with a genuine fast loop.</div>
+                </div>
+              </div>
+              <p class="text-sm text-slate-700 leading-relaxed">The sweep is larger than it first appears: 14 commits spanning two seconds (<span class="mono">...684</span> and <span class="mono">...685</span>). Crossing a second boundary mid-batch is evidence <em>against</em> date-pinning and <em>for</em> a real loop running at machine speed. The diffs are semantically reasoned, not templated: the <span class="mono">install/lockfile</span> commit carries <span class="mono">// PORT NOTE:</span> comments explaining Zig vs. Rust drop order, borrow lifetimes, and byte-exact UTF-8 semantics — the reasoning of an agent (or human) that understood what it was translating. Subsystem labels ("fix 6 http client sites" → 6 files under <span class="mono">src/http/</span>) are accurate to the file count. <strong>Verdict: likely a genuine live loop, not a replay. Content reflects real semantic reasoning.</strong></p>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-surface p-5">
+              <div class="flex items-start gap-3 mb-3">
+                <span class="mono text-xs font-bold text-ai bg-ai/10 rounded px-2 py-1 shrink-0">BATCH C</span>
+                <div>
+                  <div class="font-bold text-ink text-sm">phase-b0 engineering plan · 2026-05-05 00:00–04:14Z</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Interleaved docs: commits filled the apparent "31-minute gap" — the chain is dense and contiguous.</div>
+                </div>
+              </div>
+              <p class="text-sm text-slate-700 leading-relaxed">The apparent 31-minute gap in the <span class="mono">phase-b0</span> commits is exculpatory: it is filled by <span class="mono">docs: add Dispatch section</span> at 00:30:07 — the agent spent that half hour writing a design document before doing the DELETE pass. All 36-crate and 96-crate claims check out exactly against the diff. The phase-b1 timing (irregular gaps proportional to crate complexity, 34s–231s) is consistent with a genuine compile/fix loop. <strong>Verdict: engineering plan is expert-grade; phase-b1 timing reads as organic compile cadence.</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-base font-black text-ink mb-3">What git objects can and cannot prove</h3>
+          <div class="grid sm:grid-cols-2 gap-5">
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wide text-verified mb-3">CAN be proven</div>
+              <ul class="space-y-2 text-sm text-slate-700">
+                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Strict creation order of every commit (SHA-1 parent-preimage — cryptographically enforced, cannot be circumvented)</li>
+                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> All batches are real, distinct tree snapshots — no empty commits, no duplicate-tree pointers</li>
+                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Claimed file and crate counts are accurate where countable ("36 crates" = 36 dirs, "96 crates" = 96 manifests — exact)</li>
+                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> No post-hoc rebasing — author == committer timestamps everywhere in the sampled batches</li>
+                <li class="flex gap-2"><span class="text-verified shrink-0">✓</span> Diffs are coherent and semantically reasoned, not templated transforms</li>
+              </ul>
+            </div>
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wide text-concern mb-3">CANNOT be proven</div>
+              <ul class="space-y-2 text-sm text-slate-700">
+                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether the code was AI-generated or human-written — the object store records results, never authorship process</li>
+                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether diffs were generated live or pre-staged and replayed (byte-identical object graphs either way)</li>
+                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Actual wall-clock elapsed time — timestamps are author-controlled metadata</li>
+                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Whether GIT_AUTHOR_DATE was explicitly set — git does not record how a date was provided</li>
+                <li class="flex gap-2"><span class="text-concern shrink-0">✗</span> Who designed the migration plan — the plan is expert-grade, but git cannot say if it came from an AI, a human, or a prior design document</li>
+              </ul>
+            </div>
+          </div>
+          <p class="text-sm text-slate-500 mt-5 pt-5 border-t border-slate-200">
+            Definitive proof of "autonomous AI authorship" would require out-of-band evidence: the agent's session transcript, CI build logs with independent timestamps, the harness execution records. Git is a content-addressed <em>result</em> store — it was never designed to prove <em>process</em>.
+          </p>
         </div>
 
       </div>
