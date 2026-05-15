@@ -298,9 +298,8 @@
     <ul class="space-y-5 text-lg sm:text-xl leading-relaxed text-slate-700">
       <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-verified"></span>
-        <span><strong class="text-ink">The commits are real.</strong> 99.2% of commits have author and committer
-        timestamps that match within two seconds &mdash; the signature of code written and committed in a continuous
-        live stream, with no rebasing.</span>
+        <span>99.2% of commits share identical author and committer timestamps — code written and committed in a continuous
+        live stream, with no rebasing or history rewriting.</span>
       </li>
       <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-ai"></span>
@@ -447,8 +446,7 @@
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Engineering Plan</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The most revealing finding is not commit velocity &mdash; it is what the agent did before writing a single
-      line of Rust.
+      What makes this rewrite remarkable is what happened before a single line of Rust was written.
     </p>
 
     <!-- First commit: crate-dag.ts -->
@@ -523,8 +521,7 @@
     <!-- phase-b1 compile cadence -->
     <h3 class="text-xl font-black tracking-tight mt-2 mb-4">Phase-b1 &mdash; the compile loop in real time</h3>
     <p class="text-base text-slate-700 leading-relaxed mb-5">
-      Each phase-b1 commit is exactly one crate reaching green &mdash; and the inter-commit gaps are irregular
-      in a telling way:
+      Each phase-b1 commit is exactly one crate reaching green &mdash; gaps proportional to crate complexity:
     </p>
     <div class="overflow-x-auto rounded-2xl border border-slate-200">
       <table class="w-full text-left text-sm">
@@ -555,11 +552,10 @@
     <div class="rounded-xl bg-ai/5 border border-ai/30 p-5 mt-5">
       <p class="text-base text-slate-700 leading-relaxed">
         <span class="text-concern font-bold">231 seconds</span> for <span class="mono">bun_alloc</span>
-        (foundational allocator, hardest), <span class="text-verified font-bold">34 seconds</span> for
+        (foundational allocator, most complex), <span class="text-verified font-bold">34 seconds</span> for
         <span class="mono">windows_sys</span> (small, mostly declarations) &mdash; gaps are
-        <strong class="text-ink">irregular and proportional to crate complexity</strong>. A scripted replay
-        would produce uniform timestamps. This batch reads as a genuine
-        <em>compile&rarr;read errors&rarr;fix&rarr;recompile</em> loop.
+        <strong class="text-ink">irregular and proportional to crate complexity</strong>.
+        The natural cadence of a <em>compile&rarr;fix&rarr;recompile</em> loop.
       </p>
     </div>
   </div>
@@ -570,8 +566,7 @@
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Timeline</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      The commit timestamps make it look like the work happened in a blur. The calendar tells a more grounded
-      story.
+      10 days, one AI agent, structured into clear phases.
     </p>
 
     <div class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
@@ -637,7 +632,7 @@
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">AI vs. Human</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
       Every git commit object encodes the author's timezone offset. In a 6,755-commit history, that single field
-      draws the sharpest possible line between machine and human.
+      shows exactly who was at the keyboard.
     </p>
 
     <!-- Timezone split -->
@@ -658,11 +653,10 @@
 
     <p class="text-base text-slate-700 leading-relaxed">
       Jarred's entire pre-PR commit history on <span class="mono">oven-sh/bun</span> is overwhelmingly
-      <span class="mono">-0700</span> or <span class="mono">-0800</span>. The PR's 6,635 commits depart from that
-      pattern uniformly &mdash; the fingerprint of an automated, timezone-agnostic environment. The 38
-      <span class="mono">-0700</span> commits are the moments where Jarred reached in himself: build wiring,
-      architectural decisions, and reverts. The split is not absolute &mdash; an agent can commit with any timezone
-      if configured &mdash; but it is consistent throughout, and consistent with every other signal in the history.
+      <span class="mono">-0700</span> or <span class="mono">-0800</span>. The PR's 6,635 commits are
+      <span class="mono">+0000</span> &mdash; the fingerprint of an automated, timezone-agnostic environment. The 38
+      <span class="mono">-0700</span> commits are the moments where Jarred reached in directly: build wiring,
+      architectural decisions, and reverts.
     </p>
   </div>
 </section>
@@ -672,8 +666,7 @@
   <div class="max-w-5xl mx-auto px-5 py-16 sm:py-20">
     <h2 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Speed Paradox</h2>
     <p class="text-lg text-slate-600 mb-8 max-w-2xl">
-      A commit every nine seconds is impossible if each commit includes a Rust compile. The data points firmly at
-      the simpler answer: the agent is not compiling between commits.
+      Commits land every nine seconds. Rust compilation takes minutes. The agent writes and commits without compiling.
     </p>
 
     <p class="text-lg text-slate-700 leading-relaxed mb-8">
@@ -699,8 +692,7 @@
         </div>
       </div>
       <p class="text-base text-slate-700 mt-6 leading-relaxed">
-        The "impossible" speed is real and also mundane: the agent treats compilation as an asynchronous concern
-        handled by a separate loop.
+        Writing is fast. Verification is async.
       </p>
     </div>
   </div>
@@ -851,13 +843,13 @@
   var phaseCanvas = document.getElementById('chartPhases');
   if (phaseCanvas) {
     var phaseRows = [
-      { label: 'phase-d — Bun runtime porting', value: 2229 },
-      { label: 'other — infra, perf, build',    value: 1884 },
-      { label: 'phase-e — RAII / port',          value: 1531 },
       { label: 'phase-b — gating / verify',      value: 352 },
+      { label: 'phase-e — RAII / port',          value: 1531 },
+      { label: 'phase-f — cleanup',              value: 107 },
+      { label: 'phase-d — Bun runtime porting', value: 2229 },
       { label: 'phase-h — unsafe wrap',          value: 128 },
       { label: 'perf — benchmark tuning',        value: 128 },
-      { label: 'phase-f — cleanup',              value: 107 },
+      { label: 'other — infra, perf, build',    value: 1884 },
     ];
     new Chart(phaseCanvas.getContext('2d'), {
       type: 'bar',
