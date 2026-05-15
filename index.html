@@ -644,6 +644,115 @@
         Writing is fast. Verification is async.
       </p>
     </div>
+
+    <!-- Timing stats -->
+    <div class="mt-10">
+      <h3 class="text-xl font-black text-ink mb-1">Commit timing — all 6,754 gaps</h3>
+      <p class="text-sm text-slate-500 mb-6">Gap between consecutive commits across the full PR</p>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div class="bg-white rounded-xl border border-slate-200 p-4 text-center">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">Fastest</div>
+          <div class="text-2xl font-black text-ink">0 ms</div>
+          <div class="text-xs text-slate-500 mt-1">same-second batch (8.6%)</div>
+        </div>
+        <div class="bg-white rounded-xl border border-ai/40 ring-1 ring-ai/20 p-4 text-center">
+          <div class="text-xs font-bold uppercase tracking-wide text-ai mb-1">Median</div>
+          <div class="text-2xl font-black text-ink">9 s</div>
+          <div class="text-xs text-slate-500 mt-1">inference latency, not build</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 text-center">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">Average</div>
+          <div class="text-2xl font-black text-ink">2.1 m</div>
+          <div class="text-xs text-slate-500 mt-1">pulled up by CI waits</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4 text-center">
+          <div class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">Slowest</div>
+          <div class="text-2xl font-black text-ink">6.15 h</div>
+          <div class="text-xs text-slate-500 mt-1">SSLContextCache RAII</div>
+        </div>
+      </div>
+
+      <!-- Distribution bar chart -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="text-xs font-bold uppercase tracking-wide text-slate-400 mb-5">Distribution of inter-commit gaps</div>
+        <div class="space-y-3">
+          <!-- bucket: label | bar | pct -->
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">&lt; 1 s</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-verified/80" style="width:30.2%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">8.6%</div>
+            <div class="text-xs text-slate-400 hidden sm:block">phase-b2/d batch sweeps</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">1 – 5 s</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-ai/70" style="width:100%"></div>
+            </div>
+            <div class="w-14 text-xs mono font-bold text-ai shrink-0">28.5%</div>
+            <div class="text-xs text-slate-400 hidden sm:block">most common — inference window</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">5 – 10 s</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-ai/60" style="width:50.2%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">14.3%</div>
+            <div class="text-xs text-slate-400 hidden sm:block"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">10 – 30 s</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-slate-400/70" style="width:77.2%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">22.0%</div>
+            <div class="text-xs text-slate-400 hidden sm:block"></div>
+          </div>
+          <div class="border-t border-dashed border-slate-200 my-1 ml-24"></div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">30 – 60 s</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-caution/60" style="width:30.9%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">8.8%</div>
+            <div class="text-xs text-slate-400 hidden sm:block"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">1 – 5 m</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-caution/80" style="width:37.2%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">10.6%</div>
+            <div class="text-xs text-slate-400 hidden sm:block">CI feedback settling</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">5 m – 1 h</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-concern/60" style="width:23.5%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">6.7%</div>
+            <div class="text-xs text-slate-400 hidden sm:block"></div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="w-20 text-right text-xs mono text-slate-500 shrink-0">&gt; 1 h</div>
+            <div class="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+              <div class="h-full rounded-full bg-concern/80" style="width:1.8%"></div>
+            </div>
+            <div class="w-14 text-xs mono text-slate-600 shrink-0">0.5%</div>
+            <div class="text-xs text-slate-400 hidden sm:block">deep CI recovery / RAII refactors</div>
+          </div>
+        </div>
+        <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap gap-4 text-xs text-slate-500">
+          <span><strong class="text-ink">73.4%</strong> under 30 s</span>
+          <span><strong class="text-ink">P75</strong> 33 s</span>
+          <span><strong class="text-ink">P90</strong> 2.9 m</span>
+          <span><strong class="text-ink">P95</strong> 8.6 m</span>
+          <span><strong class="text-ink">P99</strong> 40.6 m</span>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
