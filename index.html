@@ -238,7 +238,6 @@
       <a href="#migration" class="hover:text-white transition">Migration</a>
       <a href="#timeline" class="hover:text-white transition">Timeline</a>
       <a href="#forensics" class="hover:text-white transition">AI vs.&nbsp;Human</a>
-      <a href="#appendix" class="hover:text-white transition">Appendix</a>
     </div>
     <a href="https://github.com/kiriz/rusted-bun-analysis" target="_blank" rel="noopener"
        class="text-xs font-semibold bg-ai hover:bg-ai/80 transition text-white px-3 py-1.5 rounded-md">
@@ -606,8 +605,8 @@
       </li>
       <li class="flex gap-4">
         <span class="mt-2 shrink-0 w-2.5 h-2.5 rounded-full bg-rust"></span>
-        <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,635 commits are
-        <span class="mono">+0000</span> UTC (Claude Code's automated environment); 38 are <span class="mono">-0700</span>
+        <span><strong class="text-ink">The AI/human boundary is visible in raw git.</strong> 6,667 commits are
+        <span class="mono">+0000</span> UTC (Claude Code's automated environment); 88 are <span class="mono">-0700</span>
         Pacific (Jarred Sumner on his Mac). The split marks exactly where the human intervened.</span>
       </li>
       <li class="flex gap-4">
@@ -630,7 +629,7 @@
     </p>
 
     <p class="text-lg text-slate-700 leading-relaxed mb-8">
-      <strong class="text-ink">74% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
+      <strong class="text-ink">73% of commits land in under 30 seconds.</strong> Nine seconds is roughly the
       inference time for ~430 output tokens at ~150&nbsp;tok/s &mdash; generation latency, not build latency.
     </p>
 
@@ -1129,13 +1128,13 @@
           <tr><td class="px-4 py-3 font-bold text-ink mono">May 05</td><td class="px-4 py-3 text-slate-700">Phase B2 &mdash; verify gates, tier sweeps, cycle fixes. 74 commits.</td></tr>
           <tr class="bg-ai/5"><td class="px-4 py-3 font-bold text-ai mono">May 06</td><td class="px-4 py-3 text-slate-700"><strong class="text-ink">PEAK</strong> &mdash; Phase E bulk porting of runtime modules. 2,906 commits.</td></tr>
           <tr><td class="px-4 py-3 font-bold text-ink mono">May 07</td><td class="px-4 py-3 text-slate-700">Phase F/G &mdash; merge campaigns, builder daemon, cleanup. 1,568 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 08</td><td class="px-4 py-3 text-slate-700">Phase D &mdash; seam removal (Zig&rarr;Rust bridge layers). Jarred wires CMake build. 724 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 09</td><td class="px-4 py-3 text-slate-700">Phase H &mdash; Windows-specific porting. 269 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 10</td><td class="px-4 py-3 text-slate-700">Slow day &mdash; Jarred's architectural decisions, test stabilization. 47 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 11</td><td class="px-4 py-3 text-slate-700">Safety &mdash; noalias, unsafe reduction, CI flake fixes. 285 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 12</td><td class="px-4 py-3 text-slate-700">Perf &mdash; benchmark campaign (bench-until-green ×19). 675 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 13</td><td class="px-4 py-3 text-slate-700">Tests + docs &mdash; cleanup, remove internal porting notes. 171 commits.</td></tr>
-          <tr><td class="px-4 py-3 font-bold text-ink mono">May 14</td><td class="px-4 py-3 text-slate-700">Final build fixes, merge to main. 16 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 08</td><td class="px-4 py-3 text-slate-700">Phase D &mdash; seam removal (Zig&rarr;Rust bridge layers). Jarred wires CMake build. First CI auto-fix branches. 750 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 09</td><td class="px-4 py-3 text-slate-700">Phase H &mdash; Windows-specific porting. 250 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 10</td><td class="px-4 py-3 text-slate-700">Slow day &mdash; Jarred's architectural decisions, test stabilization. 41 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 11</td><td class="px-4 py-3 text-slate-700">Safety &mdash; noalias, unsafe reduction, CI flake fixes. 284 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 12</td><td class="px-4 py-3 text-slate-700">Perf &mdash; unsafe-5k campaign (×27 merges), benchmark loop (bench-until-green ×19). 675 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 13</td><td class="px-4 py-3 text-slate-700">Tests + docs &mdash; flaky stabilization, cleanup, remove internal porting notes. 176 commits.</td></tr>
+          <tr><td class="px-4 py-3 font-bold text-ink mono">May 14</td><td class="px-4 py-3 text-slate-700">Final build fixes, merge to main. 11 commits.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1175,13 +1174,13 @@
     <!-- Timezone split -->
     <div class="grid sm:grid-cols-2 gap-5 mb-8">
       <div class="rounded-2xl border-2 border-ai bg-ai/5 p-6 sm:p-8">
-        <div class="text-5xl sm:text-6xl font-black text-ai tabular-nums mb-2">6,635</div>
+        <div class="text-5xl sm:text-6xl font-black text-ai tabular-nums mb-2">6,667</div>
         <div class="mono text-xl font-bold text-ink mb-3">author tz: +0000</div>
         <p class="text-sm text-slate-600 leading-relaxed">Claude Code's automated harness runs in UTC. There is no
         local timezone because there is no human at a machine &mdash; just an agent loop with a system clock.</p>
       </div>
       <div class="rounded-2xl border-2 border-slate-300 bg-slate-50 p-6 sm:p-8">
-        <div class="text-5xl sm:text-6xl font-black text-slate-600 tabular-nums mb-2">38</div>
+        <div class="text-5xl sm:text-6xl font-black text-slate-600 tabular-nums mb-2">88</div>
         <div class="mono text-xl font-bold text-ink mb-3">author tz: -0700</div>
         <p class="text-sm text-slate-600 leading-relaxed">Jarred Sumner, committing directly from his Mac. Pacific
         time &mdash; consistent with every other commit he has ever made in this repository.</p>
@@ -1190,8 +1189,8 @@
 
     <p class="text-base text-slate-700 leading-relaxed">
       Jarred's entire pre-PR commit history on <span class="mono">oven-sh/bun</span> is overwhelmingly
-      <span class="mono">-0700</span> or <span class="mono">-0800</span>. The PR's 6,635 commits are
-      <span class="mono">+0000</span> &mdash; the fingerprint of an automated, timezone-agnostic environment. The 38
+      <span class="mono">-0700</span> or <span class="mono">-0800</span>. The PR's 6,667 commits are
+      <span class="mono">+0000</span> &mdash; the fingerprint of an automated, timezone-agnostic environment. The 88
       <span class="mono">-0700</span> commits are the moments where Jarred reached in directly: build wiring,
       architectural decisions, and reverts.
     </p>
@@ -1237,7 +1236,7 @@
     "May 14": {"00:10":3,"00:15":1,"00:20":1,"00:25":3,"01:15":1,"05:40":1,"06:10":1}
   };
   var HEAT_MAX = 177;
-  var DAY_TOTALS = {"May 04":20,"May 05":74,"May 06":2906,"May 07":1568,"May 08":724,"May 09":269,"May 10":47,"May 11":285,"May 12":675,"May 13":171,"May 14":16};
+  var DAY_TOTALS = {"May 04":20,"May 05":74,"May 06":2906,"May 07":1568,"May 08":750,"May 09":250,"May 10":41,"May 11":284,"May 12":675,"May 13":176,"May 14":11};
 
   // ============ Shared chart palette ============
   var COLOR = {
@@ -1273,7 +1272,7 @@
   if (dayCanvas) {
     var dayLabels = ['May 04', 'May 05', 'May 06', 'May 07', 'May 08',
                      'May 09', 'May 10', 'May 11', 'May 12', 'May 13', 'May 14'];
-    var dayValues = [20, 74, 2906, 1568, 724, 269, 47, 285, 675, 171, 16];
+    var dayValues = [20, 74, 2906, 1568, 750, 250, 41, 284, 675, 176, 11];
     var annotations = {
       'May 06': 'Peak: 2,906 commits — Phase E bulk porting',
       'May 10': 'Gap — compile / test cycle',
